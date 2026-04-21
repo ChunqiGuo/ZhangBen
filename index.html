@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>记账软件</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="theme-custom">
+    <div class="scenic-bg" id="scenic-bg">
+        <div class="scenic-image" id="scenic-image"></div>
+    </div>
+
+    <div id="app">
+        <div id="login-page" class="page active">
+            <div class="login-container">
+                <div class="login-header">
+                    <div class="login-icon">📒</div>
+                    <h1>记账软件</h1>
+                </div>
+                <form id="login-form">
+                    <div class="form-group">
+                        <input type="text" id="username" required placeholder="请输入用户名">
+                    </div>
+                    <div class="form-group">
+                        <input type="password" id="password" required placeholder="请输入密码">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-full">登 录</button>
+                    <button type="button" id="register-btn" class="btn btn-outline btn-full">注 册</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="home-page" class="page">
+            <div class="header">
+                <div class="header-left">
+                    <span id="current-user" class="user-info"></span>
+                </div>
+                <h1>我的账本</h1>
+                <div class="header-right">
+                    <button id="theme-btn" class="btn btn-icon" title="选择颜色">🎨</button>
+                    <button id="settings-btn" class="btn btn-icon" title="设置">⚙️</button>
+                    <button id="logout-btn" class="btn btn-icon" title="退出">🚪</button>
+                </div>
+            </div>
+            <div class="content">
+                <button id="create-notebook-btn" class="btn btn-primary btn-full btn-large">+ 创建账本</button>
+                <div id="notebook-list" class="notebook-list"></div>
+            </div>
+        </div>
+
+        <div id="notebook-page" class="page">
+            <div class="bill-fixed-header">
+                <div class="bill-header-row">
+                    <button id="back-to-home-btn" class="btn btn-icon-dark">←</button>
+                    <div class="bill-title-wrap">
+                        <h2 class="bill-type">送货单</h2>
+                        <div id="notebook-title-display" class="bill-notebook-title"></div>
+                    </div>
+                    <div class="bill-no" id="bill-no"></div>
+                </div>
+            </div>
+            <div class="content bill-container">
+                <div class="bill-card">
+                    <div class="section-header" onclick="App.toggleSection('company')">
+                        <span class="section-title">销售方信息</span>
+                        <span class="section-toggle" id="company-toggle">▼</span>
+                    </div>
+                    <div class="company-section" id="company-section">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>公司名称</label>
+                                <input type="text" id="company-name" class="info-input" placeholder="点击填写">
+                            </div>
+                            <div class="info-item">
+                                <label>公司电话</label>
+                                <input type="tel" id="company-phone" class="info-input" placeholder="点击填写">
+                            </div>
+                            <div class="info-item full-width">
+                                <label>公司地址</label>
+                                <input type="text" id="company-address" class="info-input" placeholder="点击填写">
+                            </div>
+                            <div class="info-item">
+                                <label>微信号</label>
+                                <input type="text" id="company-wechat" class="info-input" placeholder="点击填写">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="section-header" onclick="App.toggleSection('customer')">
+                        <span class="section-title">购买方信息</span>
+                        <span class="section-toggle" id="customer-toggle">▼</span>
+                    </div>
+                    <div class="customer-section" id="customer-section">
+                        <div class="info-grid">
+                            <div class="info-item">
+                                <label>客户名称</label>
+                                <input type="text" id="customer-name" class="info-input" placeholder="点击填写">
+                            </div>
+                            <div class="info-item">
+                                <label>联系电话</label>
+                                <input type="tel" id="customer-phone" class="info-input" placeholder="点击填写">
+                            </div>
+                            <div class="info-item">
+                                <label>联系人</label>
+                                <input type="text" id="customer-contact" class="info-input" placeholder="点击填写">
+                            </div>
+                            <div class="info-item full-width">
+                                <label>客户地址</label>
+                                <input type="text" id="customer-address" class="info-input" placeholder="点击填写">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="date-section">
+                        <label>日 期</label>
+                        <div class="date-picker-row">
+                            <button id="prev-day-btn" class="btn btn-date">◀</button>
+                            <input type="date" id="date-picker" class="date-input">
+                            <button id="next-day-btn" class="btn btn-date">▶</button>
+                        </div>
+                    </div>
+
+                    <div class="table-section">
+                        <table class="bill-table">
+                            <thead>
+                                <tr>
+                                    <th>产品名称</th>
+                                    <th>单价</th>
+                                    <th>单位</th>
+                                    <th>数量</th>
+                                    <th>金额</th>
+                                    <th>备注</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bill-records-tbody">
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="total-section">
+                        <div class="total-row">
+                            <span class="total-label">合计金额（大写）</span>
+                            <span id="total-amount-cn" class="total-cn"></span>
+                        </div>
+                        <div class="total-row">
+                            <span class="total-label">¥</span>
+                            <span id="total-amount" class="total-number">0.00</span>
+                        </div>
+                    </div>
+
+                    <button id="add-record-btn" class="btn btn-primary btn-full btn-large">+ 添加产品</button>
+
+                    <div class="action-buttons-row">
+                        <button id="print-btn" class="btn btn-outline">🖨️ 打印</button>
+                        <button id="upload-image-btn" class="btn btn-outline">📷 上传图片</button>
+                    </div>
+
+                    <input type="file" id="image-input" accept="image/*" capture="environment" style="display: none;">
+
+                    <div class="image-section">
+                        <div id="image-list" class="image-list"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-overlay" class="modal-overlay">
+        <div id="modal" class="modal">
+            <div id="modal-content"></div>
+        </div>
+    </div>
+
+    <div id="print-template" style="display: none;"></div>
+
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
