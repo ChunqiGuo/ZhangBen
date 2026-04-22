@@ -1,14 +1,39 @@
-# 操作系统文件
+# Node.js
+node_modules/
+package-lock.json
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 日志
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# 操作系统
 .DS_Store
 Thumbs.db
 
-# 编辑器
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# 临时文件
-*.tmp
-*.log
+# 上传的文件（由后端服务管理）
+server/uploads/*
+!server/uploads/.gitkeep
+
+# 数据库（由后端服务管理）
+server/*.db
+server/*.db-wal
+server/*.db-shm
+
+# 部署脚本
+server/deploy.sh
+
+# 文档
+部署指南.md

@@ -1,83 +1,189 @@
+const API_BASE_URL = 'http://116.62.9.28/api';
+
 const Storage = {
-    getUsers() {
-        const users = localStorage.getItem('zhangben_users');
-        return users ? JSON.parse(users) : [];
+    getToken() {
+        return localStorage.getItem('zhangben_token');
     },
 
-    saveUsers(users) {
-        localStorage.setItem('zhangben_users', JSON.stringify(users));
+    setToken(token) {
+        localStorage.setItem('zhangben_token', token);
     },
 
-    getCurrentUser() {
-        return localStorage.getItem('zhangben_current_user');
+    clearToken() {
+        localStorage.removeItem('zhangben_token');
     },
 
-    setCurrentUser(username) {
-        localStorage.setItem('zhangben_current_user', username);
-    },
+    async request(url, options = {}) {
+        const token = this.getToken();
+        const headers = {
+            'Content-Type': 'application/json',
+            ...options.headers
+        };
 
-    clearCurrentUser() {
-        localStorage.removeItem('zhangben_current_user');
-    },
-
-    getNotebooks(username) {
-        const notebooks = localStorage.getItem(`zhangben_notebooks_${username}`);
-        return notebooks ? JSON.parse(notebooks) : [];
-    },
-
-    saveNotebooks(username, notebooks) {
-        localStorage.setItem(`zhangben_notebooks_${username}`, JSON.stringify(notebooks));
-    },
-
-    getNotebook(username, notebookId) {
-        const notebooks = this.getNotebooks(username);
-        return notebooks.find(nb => nb.id === notebookId);
-    },
-
-    saveNotebook(username, notebook) {
-        const notebooks = this.getNotebooks(username);
-        const index = notebooks.findIndex(nb => nb.id === notebook.id);
-        if (index >= 0) {
-            notebooks[index] = notebook;
-        } else {
-            notebooks.push(notebook);
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
         }
-        this.saveNotebooks(username, notebooks);
+
+        const response = await fetch(`${API_BASE_URL}${url}`, {
+            ...options,
+            headers
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || '请求失败');
+        }
+
+        return data;
     },
 
-    deleteNotebook(username, notebookId) {
-        const notebooks = this.getNotebooks(username);
-        const filtered = notebooks.filter(nb => nb.id !== notebookId);
-        this.saveNotebooks(username, filtered);
+    // 用户认证
+    async login(username, password) {
+        const data = await this.request('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password })
+        });
+        this.setToken(data.token);
+        return data;
     },
 
-    getCategories(username, notebookId) {
-        const categories = localStorage.getItem(`zhangben_categories_${username}_${notebookId}`);
-        return categories ? JSON.parse(categories) : [];
+    async register(username, password) {
+        const data = await this.request('/auth/register', {
+            method: 'POST',
+            body: JSON.stringify({ username, password })
+        });
+        this.setToken(data.token);
+        return data;
     },
 
-    saveCategories(username, notebookId, categories) {
-        localStorage.setItem(`zhangben_categories_${username}_${notebookId}`, JSON.stringify(categories));
+    async logout() {
+        this.clearToken();
     },
 
-    getRecords(username, notebookId, date) {
-        const records = localStorage.getItem(`zhangben_records_${username}_${notebookId}_${date}`);
-        return records ? JSON.parse(records) : [];
+    async getUserProfile() {
+        return await this.request('/auth/profile');
     },
 
-    saveRecords(username, notebookId, date, records) {
-        localStorage.setItem(`zhangben_records_${username}_${notebookId}_${date}`, JSON.stringify(records));
+    async updateCompanyInfo(companyData) {
+        return await this.request('/auth/company', {
+            method: 'PUT',
+            body: JSON.stringify(companyData)
+        });
     },
 
-    getImages(username, notebookId, date) {
-        const images = localStorage.getItem(`zhangben_images_${username}_${notebookId}_${date}`);
-        return images ? JSON.parse(images) : [];
+    // 账本管理
+    async getNotebooks() {
+        return await this.request('/notebooks');
     },
 
-    saveImages(username, notebookId, date, images) {
-        localStorage.setItem(`zhangben_images_${username}_${notebookId}_${date}`, JSON.stringify(images));
+    async createNotebook(name) {
+        return await this.request('/notebooks', {
+            method: 'POST',
+            body: JSON.stringify({ name })
+        });
     },
 
+    async deleteNotebook(notebookId) {
+        return await this.request(`/notebooks/${notebookId}`, {
+            method: 'DELETE'
+        });
+    },
+
+    async getNotebook(notebookId) {
+        return await this.request(`/notebooks/${notebookId}`);
+    },
+
+    // 账单记录
+    async getRecords(notebookId, date) {
+        return await this.request(`/notebooks/${notebookId}/records?date=${date}`);
+    },
+
+    async addRecord(notebookId, recordData) {
+        return await this.request(`/notebooks/${notebookId}/records`, {
+            method: 'POST',
+            body: JSON.stringify(recordData)
+        });
+    },
+
+    async deleteRecord(recordId) {
+        return await this.request(`/records/${recordId}`, {
+            method: 'DELETE'
+        });
+    },
+
+    async updateRecord(recordId, recordData) {
+        return await this.request(`/records/${recordId}`, {
+            method: 'PUT',
+            body: JSON.stringify(recordData)
+        });
+    },
+
+    // 类目管理
+    async getCategories(notebookId) {
+        return await this.request(`/notebooks/${notebookId}/categories`);
+    },
+
+    async addCategory(notebookId, categoryData) {
+        return await this.request(`/notebooks/${notebookId}/categories`, {
+            method: 'POST',
+            body: JSON.stringify(categoryData)
+        });
+    },
+
+    async deleteCategory(categoryId) {
+        return await this.request(`/categories/${categoryId}`, {
+            method: 'DELETE'
+        });
+    },
+
+    // 图片管理
+    async uploadImage(notebookId, date, file) {
+        const token = this.getToken();
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('date', date);
+
+        const response = await fetch(`${API_BASE_URL}/notebooks/${notebookId}/images`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || '上传失败');
+        }
+
+        return data;
+    },
+
+    async getImages(notebookId, date) {
+        return await this.request(`/notebooks/${notebookId}/images?date=${date}`);
+    },
+
+    async deleteImage(imageId) {
+        return await this.request(`/images/${imageId}`, {
+            method: 'DELETE'
+        });
+    },
+
+    // 客户信息
+    async getCustomerInfo(notebookId) {
+        return await this.request(`/notebooks/${notebookId}/customer`);
+    },
+
+    async saveCustomerInfo(notebookId, customerData) {
+        return await this.request(`/notebooks/${notebookId}/customer`, {
+            method: 'PUT',
+            body: JSON.stringify(customerData)
+        });
+    },
+
+    // 账单标题和电话（这些保存在本地，因为每个账本通用）
     getBillTitle(username, notebookId) {
         return localStorage.getItem(`zhangben_billtitle_${username}_${notebookId}`) || '';
     },
