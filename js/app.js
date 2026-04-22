@@ -24,10 +24,6 @@ const App = {
             this.login();
         });
 
-        document.getElementById('register-btn').addEventListener('click', () => {
-            this.showRegisterModal();
-        });
-
         document.getElementById('logout-btn').addEventListener('click', () => {
             this.logout();
         });
@@ -383,58 +379,6 @@ const App = {
                     this.showSettingsModal();
                 }, 500);
             }
-        } catch (error) {
-            alert(error.message);
-        }
-    },
-
-    showRegisterModal() {
-        const content = `
-            <h2>注册</h2>
-            <div class="modal-form-group">
-                <label>用户名</label>
-                <input type="text" id="reg-username" placeholder="请输入用户名">
-            </div>
-            <div class="modal-form-group">
-                <label>密码</label>
-                <input type="password" id="reg-password" placeholder="请输入密码">
-            </div>
-            <div class="modal-form-group">
-                <label>确认密码</label>
-                <input type="password" id="reg-password-confirm" placeholder="请再次输入密码">
-            </div>
-            <div class="modal-buttons">
-                <button class="btn btn-secondary" onclick="App.closeModal()">取消</button>
-                <button class="btn btn-primary" onclick="App.register()">注册</button>
-            </div>
-        `;
-        this.showModal(content);
-    },
-
-    async register() {
-        const username = document.getElementById('reg-username').value.trim();
-        const password = document.getElementById('reg-password').value;
-        const confirmPassword = document.getElementById('reg-password-confirm').value;
-
-        if (!username) {
-            alert('请输入用户名');
-            return;
-        }
-
-        if (!password) {
-            alert('请输入密码');
-            return;
-        }
-
-        if (password !== confirmPassword) {
-            alert('两次密码输入不一致');
-            return;
-        }
-
-        try {
-            await Storage.register(username, password);
-            alert('注册成功');
-            this.closeModal();
         } catch (error) {
             alert(error.message);
         }

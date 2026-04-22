@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://116.62.9.28/api';
+const API_BASE_URL = '/api';
 
 const Storage = {
     getToken() {
