@@ -1146,7 +1146,7 @@ ${pagesHtml}
 
     showModal(content) {
         const modal = document.getElementById('modal');
-        modal.querySelector('.modal-content').innerHTML = content;
+        modal.querySelector('#modal-content').innerHTML = content;
         modal.classList.add('active');
     },
 
