@@ -2,6 +2,7 @@ const App = {
     currentUser: null,
     currentNotebook: null,
     currentDate: new Date().toISOString().split('T')[0],
+    eventsBound: false,
 
     init() {
         this.loadTheme();
@@ -19,6 +20,9 @@ const App = {
     },
 
     bindEvents() {
+        if (this.eventsBound) return;
+        this.eventsBound = true;
+
         document.getElementById('login-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.login();
@@ -150,14 +154,12 @@ const App = {
         const R = (num >> 16) - amt;
         const G = (num >> 8 & 0x00FF) - amt;
         const B = (num & 0x0000FF) - amt;
-        return '#' + (0x1000000 + (R > 255 ? 255 : R < 0 ? 0 : R) * 0x10000 + (G > 255 ? 255 : G < 0 ? 0 : G) * 0x100 + (B > 255 ? 255 : B < 0 ? 0 : B)).toString(16).slice(1);
+        return '#' + (0x1000000 + (R > 0 ? R : 0) * 0x10000 + (G > 0 ? G : 0) * 0x100 + (B > 0 ? B : 0)).toString(16).slice(1);
     },
 
     loadTheme() {
-        const savedColor = localStorage.getItem('zhangben_theme_color');
-        if (savedColor) {
-            this.applyTheme(savedColor);
-        }
+        const savedColor = localStorage.getItem('zhangben_theme_color') || '#667eea';
+        this.applyTheme(savedColor);
     },
 
     toggleSection(section) {
@@ -497,7 +499,7 @@ const App = {
             </div>
             <div class="modal-buttons">
                 <button class="btn btn-secondary" onclick="App.closeModal()">取消</button>
-                <button class="btn btn-primary" onclick="App.calculateStatistics('${notebookId}')">确认统计</button>
+                <button class="btn btn-primary" onclick="App.calculateStatistics('${notebookId}')">计算</button>
             </div>
         `;
         this.showModal(content);
@@ -506,335 +508,128 @@ const App = {
     async calculateStatistics(notebookId) {
         const startDate = document.getElementById('stat-start-date').value;
         const endDate = document.getElementById('stat-end-date').value;
-
+        
         if (!startDate || !endDate) {
-            alert('请选择开始和结束日期');
+            alert('请选择日期范围');
             return;
         }
 
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-
-        if (start > end) {
-            alert('开始日期不能大于结束日期');
-            return;
+        try {
+            const records = await Storage.getRecords(notebookId, startDate, endDate);
+            let total = 0;
+            records.forEach(r => {
+                total += parseFloat(r.amount) || 0;
+            });
+            
+            const capitalAmount = this.convertToChineseCapital(total);
+            alert(`总价: ¥${total.toFixed(2)}\n（大写）${capitalAmount}`);
+            this.closeModal();
+        } catch (error) {
+            alert('统计失败: ' + error.message);
         }
-
-        let totalAmount = 0;
-        const dailyTotals = [];
-
-        const current = new Date(start);
-        while (current <= end) {
-            const dateStr = current.toISOString().split('T')[0];
-            try {
-                const records = await Storage.getRecords(notebookId, dateStr);
-                const dayTotal = records.reduce((sum, record) => sum + (parseFloat(record.amount) || 0), 0);
-                
-                if (dayTotal > 0) {
-                    dailyTotals.push({
-                        date: dateStr,
-                        amount: dayTotal
-                    });
-                    totalAmount += dayTotal;
-                }
-            } catch (error) {
-                console.error('获取记录失败:', error);
-            }
-
-            current.setDate(current.getDate() + 1);
-        }
-
-        let detailsHtml = dailyTotals.map(d => `
-            <div style="padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; display: flex; justify-content: space-between;">
-                <span>${d.date}</span>
-                <span style="font-weight: bold;">${d.amount.toFixed(2)}元</span>
-            </div>
-        `).join('');
-
-        const content = `
-            <h2>统计结果</h2>
-            <div style="max-height: 300px; overflow-y: auto; margin-bottom: 15px;">
-                ${dailyTotals.length > 0 ? detailsHtml : '<p style="text-align: center; color: #999;">此期间无账单记录</p>'}
-            </div>
-            <div style="text-align: right; font-size: 18px; font-weight: bold; padding: 15px; background: #f5f5f5; border-radius: 5px;">
-                总计：${totalAmount.toFixed(2)}元
-            </div>
-            <div class="modal-buttons" style="margin-top: 15px;">
-                <button class="btn btn-secondary" onclick="App.closeModal()" style="width: 100%;">返回</button>
-            </div>
-        `;
-        this.showModal(content);
     },
 
     async deleteNotebook(notebookId) {
-        if (confirm('确定要删除此账本吗？此操作不可恢复。')) {
-            try {
-                await Storage.deleteNotebook(notebookId);
-                this.closeModal();
-                await this.loadNotebooks();
-            } catch (error) {
-                alert(error.message);
-            }
+        if (!confirm('确定要删除这个账本吗？')) return;
+
+        try {
+            await Storage.deleteNotebook(notebookId);
+            this.closeModal();
+            await this.loadNotebooks();
+        } catch (error) {
+            alert(error.message);
         }
     },
 
     async openNotebook(notebookId) {
         try {
             const notebook = await Storage.getNotebook(notebookId);
-            if (!notebook) return;
-
             this.currentNotebook = notebook;
-            document.getElementById('notebook-title-display').textContent = notebook.name;
-
+            this.currentDate = new Date().toISOString().split('T')[0];
             document.getElementById('date-picker').value = this.currentDate;
-
-            document.getElementById('company-name').readOnly = true;
-            document.getElementById('company-phone').readOnly = true;
-            document.getElementById('company-address').readOnly = true;
-            document.getElementById('company-wechat').readOnly = true;
-
-            this.showPage('notebook-page');
-            await this.loadCompanyInfoToBill(await this.getCompanyInfo());
-            await this.loadCustomerInfo();
-            await this.loadDayData();
-            
+            document.getElementById('notebook-title-display').textContent = notebook.name;
             document.getElementById('bill-no').textContent = this.generateBillNo();
+            this.showPage('notebook-page');
+            await this.loadDayData();
+            await this.loadCompanyInfo();
         } catch (error) {
             alert('打开账本失败: ' + error.message);
         }
     },
 
+    async loadCompanyInfo() {
+        try {
+            const info = await Storage.getUserProfile();
+            this.loadCompanyInfoToBill(info);
+        } catch (error) {
+            console.error('加载公司信息失败:', error);
+        }
+    },
+
     async loadDayData() {
-        await this.loadRecords();
-        await this.loadImages();
-        document.getElementById('bill-no').textContent = this.generateBillNo();
-    },
+        if (!this.currentNotebook) return;
 
-    async loadRecords() {
         try {
             const records = await Storage.getRecords(this.currentNotebook.id, this.currentDate);
-            const tbody = document.getElementById('bill-records-tbody');
-
-            if (records.length === 0) {
-                tbody.innerHTML = `
-                    <tr>
-                        <td colspan="6" style="padding: 30px; color: #999;">暂无记录，请点击添加记录</td>
-                    </tr>
-                `;
-            } else {
-                tbody.innerHTML = records.map((record, index) => `
-                    <tr data-index="${index}">
-                        <td class="col-product">${record.category}</td>
-                        <td class="col-price">${record.price}元</td>
-                        <td class="col-unit">${record.unit}</td>
-                        <td class="col-quantity quantity-cell" onclick="App.showQuantityModal(${index})">${record.quantity || '-'}</td>
-                        <td class="col-amount">${record.amount ? record.amount + '元' : '-'}</td>
-                        <td class="col-remark">${record.remark || '-'}</td>
-                    </tr>
-                `).join('');
-
-                tbody.querySelectorAll('tr').forEach(tr => {
-                    let pressTimer;
-                    tr.addEventListener('mousedown', (e) => {
-                        if (e.target.closest('.quantity-cell')) return;
-                        pressTimer = setTimeout(() => {
-                            this.showRecordOptions(parseInt(tr.dataset.index));
-                        }, 800);
-                    });
-
-                    tr.addEventListener('mouseup', () => {
-                        clearTimeout(pressTimer);
-                    });
-
-                    tr.addEventListener('touchstart', (e) => {
-                        if (e.target.closest('.quantity-cell')) return;
-                        pressTimer = setTimeout(() => {
-                            this.showRecordOptions(parseInt(tr.dataset.index));
-                        }, 800);
-                    });
-
-                    tr.addEventListener('touchend', () => {
-                        clearTimeout(pressTimer);
-                    });
-                });
-            }
-
-            this.calculateTotal(records);
+            this.renderRecords(records);
+            await this.loadCustomerInfo();
+            await this.loadImages();
         } catch (error) {
-            console.error('加载记录失败:', error);
+            alert('加载数据失败: ' + error.message);
         }
     },
 
-    calculateTotal(records) {
+    renderRecords(records) {
+        const tbody = document.querySelector('#records-table tbody');
+        if (!tbody) return;
+
+        if (records.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">今日暂无记录</td></tr>';
+            document.getElementById('total-amount').textContent = '¥0.00';
+            return;
+        }
+
         let total = 0;
-        records.forEach(record => {
-            total += parseFloat(record.amount) || 0;
-        });
-        document.getElementById('total-amount').textContent = total.toFixed(2);
-        document.getElementById('total-amount-cn').textContent = this.convertToChineseCapital(total);
-    },
+        tbody.innerHTML = records.map((r, index) => {
+            const amount = parseFloat(r.amount) || 0;
+            total += amount;
+            return `
+                <tr onclick="App.showRecordOptions(${index}, ${r.id})">
+                    <td>${r.category}</td>
+                    <td>${r.price}</td>
+                    <td>${r.unit}</td>
+                    <td>${r.quantity}</td>
+                    <td>${r.amount}</td>
+                    <td>${r.remark}</td>
+                </tr>
+            `;
+        }).join('');
 
-    async preparePrint() {
-        const companyName = document.getElementById('company-name').value || '（未填写）';
-        const companyPhone = document.getElementById('company-phone').value || '';
-        const companyAddress = document.getElementById('company-address').value || '';
-        const companyWechat = document.getElementById('company-wechat').value || '';
-
-        const customerName = this.currentNotebook ? this.currentNotebook.name : '（未填写）';
-        const customerPhone = document.getElementById('customer-phone').value || '';
-        const customerAddress = document.getElementById('customer-address').value || '';
-
-        const billNo = document.getElementById('bill-no').textContent;
-        const dateStr = document.getElementById('date-picker').value;
-
-        try {
-            const records = await Storage.getRecords(this.currentNotebook.id, this.currentDate);
-            const total = records.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
-
-            const toChineseCapital = (num) => {
-                const digits = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
-                const units = ['', '拾', '佰', '仟', '万'];
-                if (num === 0) return '零元整';
-                let result = '';
-                const intPart = Math.floor(num);
-                const intStr = intPart.toString();
-                for (let i = 0; i < intStr.length; i++) {
-                    const digit = parseInt(intStr[i]);
-                    const unitIndex = intStr.length - 1 - i;
-                    if (digit !== 0) {
-                        result += digits[digit] + units[unitIndex % 4];
-                        if (unitIndex === 4) result += '万';
-                    }
-                }
-                return result + '元' + (num % 1 === 0 ? '整' : '');
-            };
-
-            const maxPerPage = 18;
-            const pages = [];
-            for (let i = 0; i < records.length; i += maxPerPage) {
-                pages.push(records.slice(i, i + maxPerPage));
-            }
-
-            const customerSection = (customerName || customerPhone || customerAddress)
-                ? `<div style="border-bottom:1px solid #000;padding:4px 0;margin-bottom:6px;font-size:8pt;">
-                    ${customerName ? `<div>客户：${customerName}</div>` : ''}
-                    ${customerPhone ? `<div>电话：${customerPhone}</div>` : ''}
-                    ${customerAddress ? `<div>地址：${customerAddress}</div>` : ''}
-                   </div>` : '';
-
-            let pagesHtml = '';
-            pages.forEach((pageRecords, pageIndex) => {
-                const isLastPage = pageIndex === pages.length - 1;
-                const startIndex = pageIndex * maxPerPage;
-
-                const recordsHtml = pageRecords.map((record, idx) => `
-                    <tr>
-                        <td style="width:8%;text-align:center;border:1px solid #000;padding:2px;font-size:8pt;">${startIndex + idx + 1}</td>
-                        <td style="width:30%;text-align:left;border:1px solid #000;padding:2px;font-size:8pt;">${record.category}</td>
-                        <td style="width:12%;text-align:center;border:1px solid #000;padding:2px;font-size:8pt;">${record.price}</td>
-                        <td style="width:10%;text-align:center;border:1px solid #000;padding:2px;font-size:8pt;">${record.unit}</td>
-                        <td style="width:15%;text-align:center;border:1px solid #000;padding:2px;font-size:8pt;">${record.quantity || '-'}</td>
-                        <td style="width:15%;text-align:right;border:1px solid #000;padding:2px;font-size:8pt;">${(parseFloat(record.amount) || 0).toFixed(2)}</td>
-                    </tr>
-                `).join('');
-
-                const pageHtml = `
-                    <div style="page-break-after: ${isLastPage ? 'avoid' : 'always'}; width: 190mm; height: calc(100vh - 10mm); position: relative; padding: 5mm; padding-bottom: 40px; box-sizing: border-box;">
-                        <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 4px;">
-                            <div>
-                                <div style="font-size: 11pt; font-weight: bold;">${companyName}</div>
-                                <div style="font-size: 7pt; color: #333;">${[companyPhone, companyAddress].filter(Boolean).join(' ')}</div>
-                            </div>
-                            <div style="font-size: 14pt; font-weight: bold; text-align: center;">送货单</div>
-                            <div style="text-align: right; font-size: 8pt;">
-                                <div>No. ${billNo}</div>
-                                <div>${dateStr}</div>
-                            </div>
-                        </div>
-                        ${customerSection}
-                        <table style="width: 100%; border-collapse: collapse; margin-bottom: 4px;">
-                            <thead>
-                                <tr>
-                                    <th style="width:8%;background:#f0f0f0;border:1px solid #000;padding:2px;font-size:8pt;">序</th>
-                                    <th style="width:30%;background:#f0f0f0;border:1px solid #000;padding:2px;font-size:8pt;">产品名称</th>
-                                    <th style="width:12%;background:#f0f0f0;border:1px solid #000;padding:2px;font-size:8pt;">单价</th>
-                                    <th style="width:10%;background:#f0f0f0;border:1px solid #000;padding:2px;font-size:8pt;">单位</th>
-                                    <th style="width:15%;background:#f0f0f0;border:1px solid #000;padding:2px;font-size:8pt;">数量</th>
-                                    <th style="width:15%;background:#f0f0f0;border:1px solid #000;padding:2px;font-size:8pt;">金额</th>
-                                </tr>
-                            </thead>
-                            <tbody>${recordsHtml}</tbody>
-                        </table>
-                        ${isLastPage ? `
-                            <div style="display: flex; justify-content: space-between; padding: 4px 0; border-top: 1px solid #000; font-weight: bold; position: absolute; bottom: 25px; left: 5mm; right: 5mm;">
-                                <div>合计（大写）：${toChineseCapital(total)}</div>
-                                <div>¥ ${total.toFixed(2)}</div>
-                            </div>
-                            <div style="display: flex; justify-content: space-between; font-size: 8pt; position: absolute; bottom: 0; left: 5mm; right: 5mm;">
-                                <div>发货人签字：___________ &nbsp;&nbsp;&nbsp;收货人签字：___________</div>
-                                <div>${companyWechat ? '微信：' + companyWechat : ''}</div>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-                pagesHtml += pageHtml;
-            });
-
-            const printHtml = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>打印送货单</title>
-<style>
-html, body { height: auto; margin: 0; padding: 0; font-family: 'SimSun', '宋体', serif; font-size: 8pt; }
-body { padding: 5mm; display: flex; justify-content: center; flex-direction: column; align-items: center; }
-@page { size: A5 landscape; margin: 0; }
-</style>
-</head>
-<body>
-${pagesHtml}
-</body>
-</html>`;
-
-            const printWindow = window.open('', '_blank', 'width=800,height=600');
-            if (printWindow) {
-                printWindow.document.write(printHtml);
-                printWindow.document.close();
-                printWindow.focus();
-                setTimeout(() => {
-                    printWindow.print();
-                    printWindow.close();
-                }, 500);
-            } else {
-                alert('请允许弹出窗口以便打印');
-            }
-        } catch (error) {
-            alert('准备打印失败: ' + error.message);
-        }
+        document.getElementById('total-amount').textContent = '¥' + total.toFixed(2);
     },
 
     async showCategoryListModal() {
         try {
             const categories = await Storage.getCategories(this.currentNotebook.id);
-
-            let categoriesHtml = categories.map((cat, index) => `
-                <div class="category-item" onclick="App.addCategoryToRecord(${index})">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-weight: bold;">${cat.name}</span>
-                        <span onclick="event.stopPropagation(); App.deleteCategory(${index})" style="color: #ff4d4f; cursor: pointer; padding: 5px;">🗑️</span>
-                    </div>
-                    <div style="color: #999; font-size: 12px;">单价：${cat.price}元/${cat.unit}</div>
-                </div>
-            `).join('');
+            if (categories.length === 0) {
+                alert('请先添加产品类目');
+                this.showAddCategoryModal();
+                return;
+            }
 
             const content = `
                 <h2>选择产品</h2>
                 <div class="category-list">
-                    ${categories.length > 0 ? categoriesHtml : '<p style="text-align: center; color: #999; padding: 20px;">暂无产品，请先添加</p>'}
+                    ${categories.map(c => `
+                        <div class="category-item" onclick="App.selectCategory('${c.name}', ${c.price}, '${c.unit}')">
+                            <span>${c.name}</span>
+                            <span>¥${c.price}/${c.unit}</span>
+                        </div>
+                    `).join('')}
                 </div>
-                <div class="modal-buttons">
-                    <button class="btn btn-secondary" onclick="App.showAddCategoryModal()">添加产品</button>
-                    <button class="btn btn-primary" onclick="App.closeModal()">取消</button>
+                <div class="modal-buttons" style="margin-top: 10px;">
+                    <button class="btn btn-secondary" onclick="App.showAddCategoryModal()">添加新产品</button>
+                    <button class="btn btn-secondary" onclick="App.closeModal()">取消</button>
                 </div>
             `;
             this.showModal(content);
@@ -843,17 +638,33 @@ ${pagesHtml}
         }
     },
 
-    async deleteCategory(index) {
-        if (!confirm('确定要删除这个产品吗？')) return;
+    selectCategory(name, price, unit) {
+        this.closeModal();
+        this.addRecordFromCategory(name, price, unit);
+    },
+
+    async addRecordFromCategory(category, price, unit) {
+        const quantity = prompt('数量:', '1');
+        if (quantity === null) return;
+
+        const amount = (parseFloat(price) * parseFloat(quantity)).toFixed(2);
+        const remark = prompt('备注:', '') || '';
+
+        const recordData = {
+            date: this.currentDate,
+            category,
+            price,
+            unit,
+            quantity,
+            amount,
+            remark
+        };
 
         try {
-            const categories = await Storage.getCategories(this.currentNotebook.id);
-            const categoryId = categories[index].id;
-            await Storage.deleteCategory(categoryId);
-            this.closeModal();
-            await this.showCategoryListModal();
+            await Storage.addRecord(this.currentNotebook.id, recordData);
+            await this.loadDayData();
         } catch (error) {
-            alert(error.message);
+            alert('添加记录失败: ' + error.message);
         }
     },
 
@@ -870,11 +681,11 @@ ${pagesHtml}
             </div>
             <div class="modal-form-group">
                 <label>单位</label>
-                <input type="text" id="category-unit" placeholder="请输入单位，如：斤、箱、个">
+                <input type="text" id="category-unit" placeholder="如：箱、件、斤">
             </div>
             <div class="modal-buttons">
-                <button class="btn btn-secondary" onclick="App.closeModal()">取消创建</button>
-                <button class="btn btn-primary" onclick="App.addCategory()">确认</button>
+                <button class="btn btn-secondary" onclick="App.closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="App.addCategory()">添加</button>
             </div>
         `;
         this.showModal(content);
@@ -885,108 +696,25 @@ ${pagesHtml}
         const price = document.getElementById('category-price').value;
         const unit = document.getElementById('category-unit').value.trim();
 
-        if (!name) {
-            alert('请输入产品名称');
-            return;
-        }
-
-        if (!price || parseFloat(price) <= 0) {
-            alert('请输入有效的单价');
-            return;
-        }
-
-        if (!unit) {
-            alert('请输入单位');
+        if (!name || !price || !unit) {
+            alert('请填写完整信息');
             return;
         }
 
         try {
-            await Storage.addCategory(this.currentNotebook.id, {
-                name,
-                price: parseFloat(price),
-                unit
-            });
+            await Storage.addCategory(this.currentNotebook.id, { name, price, unit });
             this.closeModal();
-            await this.showCategoryListModal();
+            this.showCategoryListModal();
         } catch (error) {
             alert(error.message);
         }
     },
 
-    async addCategoryToRecord(categoryIndex) {
-        try {
-            const categories = await Storage.getCategories(this.currentNotebook.id);
-            const category = categories[categoryIndex];
-
-            await Storage.addRecord(this.currentNotebook.id, {
-                date: this.currentDate,
-                category: category.name,
-                price: category.price,
-                unit: category.unit,
-                quantity: '',
-                amount: '0',
-                remark: ''
-            });
-
-            this.closeModal();
-            await this.loadRecords();
-        } catch (error) {
-            alert(error.message);
-        }
-    },
-
-    async showQuantityModal(recordIndex) {
-        try {
-            const records = await Storage.getRecords(this.currentNotebook.id, this.currentDate);
-            const record = records[recordIndex];
-            
-            const content = `
-                <h2>输入数量</h2>
-                <div class="modal-form-group">
-                    <label>数量（单位：${record.unit}）</label>
-                    <input type="number" id="quantity-value" placeholder="请输入数量" step="0.01">
-                </div>
-                <div class="modal-buttons">
-                    <button class="btn btn-secondary" onclick="App.closeModal()">取消</button>
-                    <button class="btn btn-primary" onclick="App.saveQuantity(${recordIndex})">确定</button>
-                </div>
-            `;
-            this.showModal(content);
-        } catch (error) {
-            alert('加载记录失败: ' + error.message);
-        }
-    },
-
-    async saveQuantity(recordIndex) {
-        const quantity = document.getElementById('quantity-value').value;
-
-        if (!quantity || parseFloat(quantity) <= 0) {
-            alert('请输入有效的数量');
-            return;
-        }
-
-        try {
-            const records = await Storage.getRecords(this.currentNotebook.id, this.currentDate);
-            const record = records[recordIndex];
-            const amount = (record.price * parseFloat(quantity)).toFixed(2);
-
-            await Storage.updateRecord(record.id, {
-                quantity: quantity + record.unit,
-                amount
-            });
-
-            this.closeModal();
-            await this.loadRecords();
-        } catch (error) {
-            alert(error.message);
-        }
-    },
-
-    showRecordOptions(recordIndex) {
+    async showRecordOptions(index, recordId) {
         const content = `
             <h2>记录选项</h2>
             <div class="modal-buttons">
-                <button class="btn btn-secondary" onclick="App.deleteRecord(${recordIndex})" style="width: 100%; background: #ff4d4f;">删除记录</button>
+                <button class="btn btn-primary" onclick="App.deleteRecord(${recordId})" style="width: 100%; background: #ff4d4f;">删除记录</button>
             </div>
             <div class="modal-buttons" style="margin-top: 10px;">
                 <button class="btn btn-secondary" onclick="App.closeModal()" style="width: 100%;">取消</button>
@@ -995,38 +723,15 @@ ${pagesHtml}
         this.showModal(content);
     },
 
-    async deleteRecord(recordIndex) {
-        if (confirm('确定要删除此记录吗？')) {
-            try {
-                const records = await Storage.getRecords(this.currentNotebook.id, this.currentDate);
-                const recordId = records[recordIndex].id;
-                await Storage.deleteRecord(recordId);
-                this.closeModal();
-                await this.loadRecords();
-            } catch (error) {
-                alert(error.message);
-            }
-        }
-    },
+    async deleteRecord(recordId) {
+        if (!confirm('确定要删除这条记录吗？')) return;
 
-    async loadImages() {
         try {
-            const images = await Storage.getImages(this.currentNotebook.id, this.currentDate);
-            const container = document.getElementById('images-container');
-
-            if (images.length === 0) {
-                container.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">暂无图片</p>';
-                return;
-            }
-
-            container.innerHTML = images.map((img, index) => `
-                <div class="image-item" data-index="${index}" data-id="${img.id}">
-                    <img src="${window.location.origin}${img.url}" alt="账单图片" onclick="App.previewImage(this.src)">
-                    <div class="image-delete" onclick="App.deleteImage(${img.id})">🗑️</div>
-                </div>
-            `).join('');
+            await Storage.deleteRecord(recordId);
+            this.closeModal();
+            await this.loadDayData();
         } catch (error) {
-            console.error('加载图片失败:', error);
+            alert(error.message);
         }
     },
 
@@ -1034,7 +739,7 @@ ${pagesHtml}
         const content = `
             <h2>上传图片</h2>
             <div class="modal-buttons">
-                <button class="btn btn-primary" onclick="document.getElementById('image-input').click()">选择图片</button>
+                <button class="btn btn-primary" onclick="document.getElementById('image-input').click(); App.closeModal();">选择图片</button>
             </div>
             <div class="modal-buttons" style="margin-top: 10px;">
                 <button class="btn btn-secondary" onclick="App.closeModal()" style="width: 100%;">取消</button>
@@ -1046,18 +751,58 @@ ${pagesHtml}
     async handleImageUpload(file) {
         if (!file) return;
 
-        if (!file.type.startsWith('image/')) {
-            alert('请选择图片文件');
-            return;
-        }
-
-        if (file.size > 5 * 1024 * 1024) {
-            alert('图片大小不能超过5MB');
-            return;
-        }
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('date', this.currentDate);
 
         try {
-            await Storage.uploadImage(this.currentNotebook.id, this.currentDate, file);
+            await Storage.uploadImage(this.currentNotebook.id, formData);
+            await this.loadImages();
+        } catch (error) {
+            alert('上传图片失败: ' + error.message);
+        }
+    },
+
+    async loadImages() {
+        if (!this.currentNotebook) return;
+
+        try {
+            const images = await Storage.getImages(this.currentNotebook.id, this.currentDate);
+            const container = document.getElementById('image-container');
+            
+            if (images.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = images.map(img => `
+                <div class="image-item" onclick="App.showImageOptions(${img.id})">
+                    <img src="/uploads/${img.filename}" alt="单据图片">
+                </div>
+            `).join('');
+        } catch (error) {
+            console.error('加载图片失败:', error);
+        }
+    },
+
+    showImageOptions(imageId) {
+        const content = `
+            <h2>图片选项</h2>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" onclick="App.deleteImage(${imageId})" style="width: 100%; background: #ff4d4f;">删除图片</button>
+            </div>
+            <div class="modal-buttons" style="margin-top: 10px;">
+                <button class="btn btn-secondary" onclick="App.closeModal()" style="width: 100%;">取消</button>
+            </div>
+        `;
+        this.showModal(content);
+    },
+
+    async deleteImage(imageId) {
+        if (!confirm('确定要删除这张图片吗？')) return;
+
+        try {
+            await Storage.deleteImage(imageId);
             this.closeModal();
             await this.loadImages();
         } catch (error) {
@@ -1065,27 +810,8 @@ ${pagesHtml}
         }
     },
 
-    previewImage(src) {
-        const content = `
-            <div style="text-align: center;">
-                <img src="${src}" style="max-width: 100%; max-height: 70vh; object-fit: contain;">
-            </div>
-            <div class="modal-buttons" style="margin-top: 15px;">
-                <button class="btn btn-secondary" onclick="App.closeModal()" style="width: 100%;">关闭</button>
-            </div>
-        `;
-        this.showModal(content);
-    },
-
-    async deleteImage(imageId) {
-        if (!confirm('确定要删除此图片吗？')) return;
-
-        try {
-            await Storage.deleteImage(imageId);
-            await this.loadImages();
-        } catch (error) {
-            alert(error.message);
-        }
+    preparePrint() {
+        window.print();
     },
 
     showModal(content) {
