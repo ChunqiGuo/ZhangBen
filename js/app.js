@@ -768,7 +768,7 @@ const App = {
 
         try {
             const images = await Storage.getImages(this.currentNotebook.id, this.currentDate);
-            const container = document.getElementById('image-container');
+            const container = document.getElementById('image-list');
             
             if (images.length === 0) {
                 container.innerHTML = '';
