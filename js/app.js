@@ -817,11 +817,11 @@ const App = {
     showModal(content) {
         const modal = document.getElementById('modal');
         modal.querySelector('#modal-content').innerHTML = content;
-        modal.classList.add('active');
+        document.getElementById('modal-overlay').classList.add('active');
     },
 
     closeModal() {
-        document.getElementById('modal').classList.remove('active');
+        document.getElementById('modal-overlay').classList.remove('active');
     }
 };
 
