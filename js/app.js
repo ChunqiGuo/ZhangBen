@@ -638,10 +638,10 @@ const App = {
         if (!this.currentNotebook) return;
         
         const customerData = {
-            customer_name: document.getElementById('customer-name').value || '',
-            customer_phone: document.getElementById('customer-phone').value || '',
-            customer_contact: document.getElementById('customer-contact').value || '',
-            customer_address: document.getElementById('customer-address').value || ''
+            customerName: document.getElementById('customer-name').value || '',
+            customerPhone: document.getElementById('customer-phone').value || '',
+            customerContact: document.getElementById('customer-contact').value || '',
+            customerAddress: document.getElementById('customer-address').value || ''
         };
         
         try {
@@ -687,10 +687,26 @@ const App = {
         tbody.innerHTML = records.map((r, index) => {
             const amount = parseFloat(r.amount) || 0;
             total += amount;
-            // 截断备注显示，最多10个字符加...
+            // 截断备注显示，正确处理中英文混合
             let displayRemark = r.remark;
-            if (displayRemark && displayRemark.length > 10) {
-                displayRemark = displayRemark.substring(0, 10) + '...';
+            if (displayRemark) {
+                // 计算可见字符数（中文算2个字符，英文算1个字符）
+                let visibleLength = 0;
+                let result = '';
+                for (let i = 0; i < displayRemark.length; i++) {
+                    const char = displayRemark.charAt(i);
+                    // 中文及其他宽字符算2个字符
+                    const charLength = /[\u4e00-\u9fa5\u3000-\u303f\uff00-\uffef]/.test(char) ? 2 : 1;
+                    if (visibleLength + charLength > 10) {
+                        break;
+                    }
+                    result += char;
+                    visibleLength += charLength;
+                }
+                // 如果被截断，添加省略号
+                if (result.length < displayRemark.length) {
+                    displayRemark = result + '...';
+                }
             }
             return `
                 <tr data-record-id="${r.id}" style="height: 50px;">
@@ -699,7 +715,7 @@ const App = {
                     <td>${r.unit}</td>
                     <td>${r.quantity}</td>
                     <td>${r.amount}</td>
-                    <td style="cursor: pointer;" onclick="event.stopPropagation(); App.showEditRemarkModal(${r.id}, '${r.remark.replace(/'/g, "\\'")}')">${displayRemark || '<span style="color:#999;">点击添加备注</span>'}</td>
+                    <td style="cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px;" onclick="event.stopPropagation(); App.showEditRemarkModal(${r.id}, '${r.remark.replace(/'/g, "\\'")}')">${displayRemark || '<span style="color:#999;">点击添加备注</span>'}</td>
                 </tr>
             `;
         }).join('');
@@ -1203,7 +1219,27 @@ const App = {
     },
 
     async preparePrint() {
+        // 先显示选择纸张的弹窗
+        const content = `
+            <h2>选择打印纸张</h2>
+            <div class="modal-form-group">
+                <label>纸张尺寸</label>
+                <select id="paper-size" style="width: 100%; padding: 12px; border: 2px solid #e8e8e8; border-radius: 10px; font-size: 16px;">
+                    <option value="241x93">241mm × 93mm（送货单）</option>
+                    <option value="A5">A5（148mm × 210mm）</option>
+                </select>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="App.closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="App.proceedToPrint()">确定</button>
+            </div>
+        `;
+        this.showModal(content);
+    },
+
+    async proceedToPrint() {
         try {
+            const paperSize = document.getElementById('paper-size').value;
             const records = await Storage.getRecords(this.currentNotebook.id, this.currentDate);
             const userProfile = await Storage.getUserProfile();
             
@@ -1215,12 +1251,16 @@ const App = {
             // 转换为中文大写金额
             const capitalAmount = this.convertToChineseCapital(totalAmount);
             
+            // 关闭选择弹窗
+            this.closeModal();
+            
             // 创建打印模板
             const printContent = this.createDeliveryNoteTemplate(
                 userProfile,
                 records,
                 totalAmount,
-                capitalAmount
+                capitalAmount,
+                paperSize
             );
             
             // 创建临时打印窗口
@@ -1240,84 +1280,98 @@ const App = {
                         
                         body {
                             font-family: "SimSun", "宋体", sans-serif;
-                            font-size: 14px;
-                            line-height: 1.5;
+                            font-size: 13px;
+                            line-height: 1.4;
                         }
                         
                         .delivery-note {
-                            width: 241mm;
-                            height: 93mm;
-                            padding: 8mm;
+                            ${paperSize === 'A5' ? 
+                                'width: 210mm; min-height: 148mm; padding: 8mm 10mm; display: flex; flex-direction: column;' : 
+                                'width: 241mm; height: 93mm; padding: 5mm 10mm; display: flex; flex-direction: column;'
+                            }
                             margin: 0 auto;
                         }
                         
                         @media print {
                             .delivery-note {
-                                width: 241mm;
-                                height: 93mm;
-                                padding: 8mm;
+                                ${paperSize === 'A5' ? 
+                                    'width: 210mm; min-height: 148mm; padding: 8mm 10mm;' : 
+                                    'width: 241mm; height: 93mm; padding: 5mm 10mm;'
+                                }
                             }
                             
                             @page {
-                                size: 241mm 93mm;
+                                size: ${paperSize === 'A5' ? 'A5 landscape' : '241mm 93mm landscape'};
                                 margin: 0;
+                                orientation: landscape;
                             }
                         }
                         
-                        .note-header {
+                        .company-name {
                             text-align: center;
-                            margin-bottom: 8px;
-                        }
-                        
-                        .note-title {
-                            font-size: 24px;
+                            font-size: ${paperSize === 'A5' ? '22px' : '18px'};
                             font-weight: bold;
-                            letter-spacing: 8px;
-                            margin-bottom: 4px;
+                            letter-spacing: 4px;
+                            margin-bottom: ${paperSize === 'A5' ? '4px' : '3px'};
                         }
                         
-                        .note-no {
-                            font-size: 12px;
-                            color: #666;
-                        }
-                        
-                        .info-section {
+                        .customer-date-row {
                             display: flex;
                             justify-content: space-between;
-                            margin-bottom: 6px;
-                            font-size: 13px;
+                            font-size: ${paperSize === 'A5' ? '13px' : '11px'};
+                            margin-bottom: ${paperSize === 'A5' ? '4px' : '3px'};
                         }
                         
-                        .info-left, .info-right {
-                            width: 48%;
+                        .customer-name, .date {
+                            display: flex;
+                            align-items: center;
                         }
                         
-                        .info-row {
-                            margin-bottom: 3px;
-                        }
-                        
-                        .info-label {
-                            display: inline-block;
-                            width: 60px;
+                        .label {
                             font-weight: bold;
                         }
                         
                         .goods-table {
                             width: 100%;
                             border-collapse: collapse;
-                            margin-bottom: 6px;
-                            font-size: 12px;
+                            font-size: ${paperSize === 'A5' ? '12px' : '11px'};
+                            flex: 1;
                         }
                         
-                        .goods-table th,
-                        .goods-table td {
+                        .table-header th {
                             border: 1px solid #000;
-                            padding: 4px 3px;
+                            padding: ${paperSize === 'A5' ? '3px 2px' : '2px 2px'};
                             text-align: center;
+                            background: #f5f5f5;
+                            font-weight: bold;
                         }
                         
-                        .goods-table th {
-                            background-color: #f0f0f0;
+                        .goods-row td {
+                            border: 1px solid #000;
+                            padding: ${paperSize === 'A5' ? '3px 2px' : '2px 2px'};
+                            text-align: center;
+                            height: ${paperSize === 'A5' ? '18px' : '12px'};
+                            min-height: ${paperSize === 'A5' ? '18px' : '12px'};
+                            line-height: ${paperSize === 'A5' ? '12px' : '8px'};
+                            vertical-align: middle;
+                        }
+                        
+                        .total-row td {
+                            border: 1px solid #000;
+                            padding: ${paperSize === 'A5' ? '3px 2px' : '2px 2px'};
+                            height: ${paperSize === 'A5' ? '18px' : '12px'};
+                            min-height: ${paperSize === 'A5' ? '18px' : '12px'};
+                            line-height: ${paperSize === 'A5' ? '12px' : '8px'};
+                            vertical-align: middle;
+                        }
+                        
+                        .total-capital-cell {
+                            text-align: left;
+                            font-weight: bold;
+                        }
+                        
+                        .total-small-cell {
+                            text-align: right;
                             font-weight: bold;
                         }
                         
@@ -1325,35 +1379,16 @@ const App = {
                         .col-name { width: 32%; }
                         .col-unit { width: 10%; }
                         .col-quantity { width: 10%; }
-                        .col-price { width: 15%; }
-                        .col-amount { width: 15%; }
-                        .col-remark { width: 10%; }
-                        
-                        .total-section {
-                            display: flex;
-                            justify-content: space-between;
-                            align-items: center;
-                            font-size: 13px;
-                            margin-bottom: 6px;
-                        }
-                        
-                        .total-left {
-                            flex: 1;
-                        }
-                        
-                        .total-right {
-                            text-align: right;
-                        }
-                        
-                        .total-capital {
-                            font-weight: bold;
-                        }
+                        .col-price { width: 13%; }
+                        .col-amount { width: 14%; }
+                        .col-remark { width: 13%; }
                         
                         .signature-section {
                             display: flex;
                             justify-content: space-between;
-                            margin-top: 8px;
-                            font-size: 12px;
+                            margin-top: auto;
+                            padding-top: ${paperSize === 'A5' ? '4px' : '3px'};
+                            font-size: ${paperSize === 'A5' ? '11px' : '10px'};
                         }
                         
                         .signature-item {
@@ -1362,8 +1397,12 @@ const App = {
                         
                         .signature-line {
                             border-bottom: 1px solid #000;
-                            width: 80px;
+                            width: ${paperSize === 'A5' ? '90px' : '70px'};
                             margin: 0 auto 2px;
+                        }
+                        
+                        .signature-label {
+                            font-size: ${paperSize === 'A5' ? '11px' : '10px'};
                         }
                     </style>
                 </head>
@@ -1375,7 +1414,9 @@ const App = {
             
             printWindow.document.close();
             printWindow.onload = () => {
-                printWindow.print();
+                setTimeout(() => {
+                    printWindow.print();
+                }, 300);
             };
             
         } catch (error) {
@@ -1383,87 +1424,69 @@ const App = {
         }
     },
     
-    createDeliveryNoteTemplate(userProfile, records, totalAmount, capitalAmount) {
+    createDeliveryNoteTemplate(userProfile, records, totalAmount, capitalAmount, paperSize) {
         const date = new Date(this.currentDate);
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
         
-        const companyName = userProfile.companyName || '';
-        const companyPhone = userProfile.companyPhone || '';
+        const companyName = userProfile.companyName || '送货单位';
         const customerName = document.getElementById('customer-name').value || '';
-        const customerPhone = document.getElementById('customer-phone').value || '';
-        const customerContact = document.getElementById('customer-contact').value || '';
-        const customerAddress = document.getElementById('customer-address').value || '';
+        
+        // 根据纸张尺寸确定显示的最大行数
+        const maxRows = paperSize === 'A5' ? 16 : 9;
         
         let goodsRows = '';
         records.forEach((r, index) => {
-            goodsRows += `
-                <tr>
-                    <td class="col-no">${index + 1}</td>
-                    <td class="col-name">${r.category}</td>
-                    <td class="col-unit">${r.unit}</td>
-                    <td class="col-quantity">${r.quantity}</td>
-                    <td class="col-price">${r.price}</td>
-                    <td class="col-amount">${r.amount}</td>
-                    <td class="col-remark">${r.remark || ''}</td>
-                </tr>
-            `;
+            if (index < maxRows) {
+                goodsRows += `
+                    <tr class="goods-row">
+                        <td class="col-no">${index + 1}</td>
+                        <td class="col-name">${r.category}</td>
+                        <td class="col-unit">${r.unit}</td>
+                        <td class="col-quantity">${r.quantity}</td>
+                        <td class="col-price">${r.price}</td>
+                        <td class="col-amount">${r.amount}</td>
+                        <td class="col-remark">${r.remark || ''}</td>
+                    </tr>
+                `;
+            }
         });
         
         // 如果记录不足，填充空行
-        const emptyRows = Math.max(0, 6 - records.length);
+        const emptyRows = Math.max(0, maxRows - records.length);
         for (let i = 0; i < emptyRows; i++) {
             goodsRows += `
-                <tr>
-                    <td class="col-no"></td>
-                    <td class="col-name"></td>
-                    <td class="col-unit"></td>
-                    <td class="col-quantity"></td>
-                    <td class="col-price"></td>
-                    <td class="col-amount"></td>
-                    <td class="col-remark"></td>
+                <tr class="goods-row">
+                    <td class="col-no">&nbsp;</td>
+                    <td class="col-name">&nbsp;</td>
+                    <td class="col-unit">&nbsp;</td>
+                    <td class="col-quantity">&nbsp;</td>
+                    <td class="col-price">&nbsp;</td>
+                    <td class="col-amount">&nbsp;</td>
+                    <td class="col-remark">&nbsp;</td>
                 </tr>
             `;
         }
         
         return `
             <div class="delivery-note">
-                <div class="note-header">
-                    <div class="note-title">送 货 单</div>
-                    <div class="note-no">${document.getElementById('bill-no').textContent}</div>
-                </div>
+                <div class="company-name">${companyName}</div>
                 
-                <div class="info-section">
-                    <div class="info-left">
-                        <div class="info-row">
-                            <span class="info-label">客户名称：</span>
-                            <span>${customerName}</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">联系电话：</span>
-                            <span>${customerPhone}</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">联系人：</span>
-                            <span>${customerContact}</span>
-                        </div>
+                <div class="customer-date-row">
+                    <div class="customer-name">
+                        <span class="label">客户名称：</span>
+                        <span>${customerName}</span>
                     </div>
-                    <div class="info-right">
-                        <div class="info-row">
-                            <span class="info-label">送货日期：</span>
-                            <span>${year}年${month}月${day}日</span>
-                        </div>
-                        <div class="info-row">
-                            <span class="info-label">客户地址：</span>
-                            <span>${customerAddress}</span>
-                        </div>
+                    <div class="date">
+                        <span class="label">日期：</span>
+                        <span>${year}年${month}月${day}日</span>
                     </div>
                 </div>
                 
                 <table class="goods-table">
                     <thead>
-                        <tr>
+                        <tr class="table-header">
                             <th class="col-no">序号</th>
                             <th class="col-name">产品名称</th>
                             <th class="col-unit">单位</th>
@@ -1475,34 +1498,21 @@ const App = {
                     </thead>
                     <tbody>
                         ${goodsRows}
+                        <tr class="total-row">
+                            <td colspan="5" class="total-capital-cell">合计（大写）：${capitalAmount}</td>
+                            <td colspan="2" class="total-small-cell">¥${totalAmount.toFixed(2)}</td>
+                        </tr>
                     </tbody>
                 </table>
-                
-                <div class="total-section">
-                    <div class="total-left">
-                        <span class="total-capital">合计（大写）：${capitalAmount}</span>
-                    </div>
-                    <div class="total-right">
-                        小写：¥${totalAmount.toFixed(2)}
-                    </div>
-                </div>
                 
                 <div class="signature-section">
                     <div class="signature-item">
                         <div class="signature-line"></div>
-                        <div>制单人</div>
+                        <div class="signature-label">送货单位（签章）</div>
                     </div>
                     <div class="signature-item">
                         <div class="signature-line"></div>
-                        <div>送货人</div>
-                    </div>
-                    <div class="signature-item">
-                        <div class="signature-line"></div>
-                        <div>收货人</div>
-                    </div>
-                    <div class="signature-item">
-                        <div class="signature-line"></div>
-                        <div>备注</div>
+                        <div class="signature-label">收货单位（签章）</div>
                     </div>
                 </div>
             </div>
