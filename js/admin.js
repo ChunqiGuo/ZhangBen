@@ -8,54 +8,14 @@ const AdminApp = {
 
     init() {
         this.token = localStorage.getItem('zhangben_token');
-        this.bindEvents();
+        this.bindModalEvents();
         
         if (this.token) {
             // 检查是否是管理员
             this.checkAdminAndShow();
         } else {
-            this.showLoginPage();
-        }
-    },
-
-    bindEvents() {
-        document.getElementById('loginForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.login();
-        });
-    },
-
-    async login() {
-        const username = document.getElementById('adminUsername').value.trim();
-        const password = document.getElementById('adminPassword').value;
-
-        if (!username || !password) {
-            alert('请输入用户名和密码');
-            return;
-        }
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/auth/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, password })
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || '登录失败');
-            }
-
-            this.token = data.token;
-            localStorage.setItem('zhangben_token', this.token);
-            
-            await this.checkAdminAndShow();
-        } catch (error) {
-            console.error('登录失败:', error);
-            alert('登录失败: ' + error.message);
+            // 没有token，跳转回首页
+            location.href = 'index.html';
         }
     },
 
@@ -66,22 +26,16 @@ const AdminApp = {
             this.showAdminPage();
             this.loadUsers();
         } catch (error) {
-            // 如果不是管理员，显示登录页面
+            // 如果不是管理员，清除token并跳转回首页
             localStorage.removeItem('zhangben_token');
             this.token = null;
             alert('需要管理员权限才能访问后台管理系统');
-            this.showLoginPage();
+            location.href = 'index.html';
         }
     },
 
-    showLoginPage() {
-        document.getElementById('loginPage').style.display = 'flex';
-        document.getElementById('adminPage').classList.remove('active');
-    },
-
     showAdminPage() {
-        document.getElementById('loginPage').style.display = 'none';
-        document.getElementById('adminPage').classList.add('active');
+        document.getElementById('adminPage').style.display = 'block';
     },
 
     async request(url, options = {}) {
@@ -99,9 +53,6 @@ const AdminApp = {
         const data = await response.json();
 
         if (!response.ok) {
-            if (response.status === 403) {
-                alert('需要管理员权限！');
-            }
             throw new Error(data.error || '请求失败');
         }
 
@@ -113,8 +64,7 @@ const AdminApp = {
             this.users = await this.request('/admin/users');
             this.renderUserList();
         } catch (error) {
-            console.error('加载用户失败:', error);
-            alert('加载用户失败: ' + error.message);
+            console.error('加载用户列表失败:', error);
         }
     },
 
@@ -179,27 +129,13 @@ const AdminApp = {
                     <label>微信号</label>
                     <div class="value">${this.selectedUser.company_wechat || '-'}</div>
                 </div>
-                <div class="info-item">
-                    <label>注册时间</label>
-                    <div class="value">${this.selectedUser.created_at}</div>
-                </div>
-                <div class="info-item">
-                    <label>账本数量</label>
-                    <div class="value">${this.selectedUser.notebookCount}</div>
-                </div>
-                <div class="info-item">
-                    <label>记录数量</label>
-                    <div class="value">${this.selectedUser.recordCount}</div>
-                </div>
             </div>
-        `;
-
-        const userActions = document.getElementById('userActions');
-        userActions.innerHTML = `
-            <button class="btn btn-secondary" onclick="AdminApp.showEditUserModal()">✏️ 修改信息</button>
-            <button class="btn btn-warning" onclick="AdminApp.showChangePasswordModal()">🔐 修改密码</button>
-            <button class="btn btn-primary" onclick="AdminApp.exportUserData()">📤 导出数据</button>
-            <button class="btn btn-danger" onclick="AdminApp.showDeleteUserModal()">🗑️ 删除用户</button>
+            <div class="user-actions">
+                <button class="btn btn-primary" onclick="AdminApp.showEditUserModal()">✏️ 修改信息</button>
+                <button class="btn btn-warning" onclick="AdminApp.showChangePasswordModal()">🔐 修改密码</button>
+                <button class="btn btn-primary" onclick="AdminApp.exportUserData()">📤 导出数据</button>
+                <button class="btn btn-danger" onclick="AdminApp.showDeleteUserModal()">🗑️ 删除用户</button>
+            </div>
         `;
 
         await this.loadUserNotebooks();
@@ -212,7 +148,6 @@ const AdminApp = {
             this.renderNotebookList(notebooks);
         } catch (error) {
             console.error('加载账本失败:', error);
-            alert('加载账本失败: ' + error.message);
         }
     },
 
@@ -242,75 +177,83 @@ const AdminApp = {
             await this.loadNotebookRecords();
         } catch (error) {
             console.error('加载账本记录失败:', error);
-            alert('加载账本记录失败: ' + error.message);
         }
     },
 
     async loadNotebookRecords() {
-        if (!this.selectedNotebook) return;
+        const recordsView = document.getElementById('recordsView');
+        const recordsContainer = document.getElementById('recordsContainer');
 
-        try {
-            const records = await this.request(`/admin/notebooks/${this.selectedNotebook.id}/records`);
-            this.renderRecords(records);
-            document.getElementById('recordsView').style.display = 'block';
-        } catch (error) {
-            console.error('加载记录失败:', error);
-            alert('加载记录失败: ' + error.message);
-        }
-    },
-
-    renderRecords(records) {
-        const container = document.getElementById('recordsContainer');
-        if (records.length === 0) {
-            container.innerHTML = '<div class="empty-state">暂无记录</div>';
+        if (!this.selectedNotebook) {
+            recordsView.style.display = 'none';
             return;
         }
 
-        container.innerHTML = `
-            <table class="records-table">
-                <thead>
-                    <tr>
-                        <th>日期</th>
-                        <th>品名</th>
-                        <th>单位</th>
-                        <th>数量</th>
-                        <th>单价</th>
-                        <th>金额</th>
-                        <th>备注</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${records.map(record => `
+        try {
+            const records = await this.request(`/admin/notebooks/${this.selectedNotebook.id}/records`);
+            recordsView.style.display = 'block';
+
+            if (records.length === 0) {
+                recordsContainer.innerHTML = '<div class="empty-state">暂无记录</div>';
+                return;
+            }
+
+            recordsContainer.innerHTML = `
+                <table class="records-table">
+                    <thead>
                         <tr>
-                            <td>${record.date}</td>
-                            <td>${record.category}</td>
-                            <td>${record.unit}</td>
-                            <td>${record.quantity}</td>
-                            <td>${record.price}</td>
-                            <td>${record.amount}</td>
-                            <td>${record.remark || '-'}</td>
+                            <th>日期</th>
+                            <th>品类</th>
+                            <th>单价</th>
+                            <th>单位</th>
+                            <th>数量</th>
+                            <th>金额</th>
+                            <th>备注</th>
                         </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
+                    </thead>
+                    <tbody>
+                        ${records.map(record => `
+                            <tr>
+                                <td>${record.date || '-'}</td>
+                                <td>${record.category || '-'}</td>
+                                <td>${record.price || '-'}</td>
+                                <td>${record.unit || '-'}</td>
+                                <td>${record.quantity || '-'}</td>
+                                <td>${record.amount || '-'}</td>
+                                <td>${record.remark || '-'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        } catch (error) {
+            console.error('加载记录失败:', error);
+        }
     },
 
     hideRecords() {
+        document.getElementById('recordsView').style.display = 'none';
         this.selectedNotebook = null;
         this.loadUserNotebooks();
-        document.getElementById('recordsView').style.display = 'none';
     },
 
-    switchTab(tab) {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        
+    switchTab(tabName) {
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+
         event.target.classList.add('active');
-        document.getElementById(`tab-${tab}`).classList.add('active');
+        document.getElementById(`tab-${tabName}`).classList.add('active');
     },
 
     showCreateUserModal() {
+        if (this.selectedUser && this.selectedUser.username === 'xiaoqimate') {
+            alert('超级管理员需要先初始化数据库才能创建用户');
+            return;
+        }
         document.getElementById('createUserModal').classList.add('active');
     },
 
@@ -323,7 +266,7 @@ const AdminApp = {
         const companyWechat = document.getElementById('newCompanyWechat').value.trim();
 
         if (!username || !password) {
-            alert('用户名和密码不能为空！');
+            alert('请填写必要信息');
             return;
         }
 
@@ -339,57 +282,18 @@ const AdminApp = {
                     companyWechat
                 })
             });
-            alert('创建成功！');
-            closeModal('createUserModal');
-            this.clearCreateUserForm();
+
+            alert('创建成功');
+            this.closeModal('createUserModal');
             this.loadUsers();
         } catch (error) {
-            console.error('创建用户失败:', error);
-            alert('创建用户失败: ' + error.message);
-        }
-    },
-
-    clearCreateUserForm() {
-        document.getElementById('newUsername').value = '';
-        document.getElementById('newPassword').value = '';
-        document.getElementById('newCompanyName').value = '';
-        document.getElementById('newCompanyPhone').value = '';
-        document.getElementById('newCompanyAddress').value = '';
-        document.getElementById('newCompanyWechat').value = '';
-    },
-
-    showChangePasswordModal() {
-        if (!this.selectedUser) {
-            alert('请先选择用户！');
-            return;
-        }
-        document.getElementById('changePasswordModal').classList.add('active');
-    },
-
-    async changePassword() {
-        const password = document.getElementById('changePassword').value;
-        if (!password) {
-            alert('密码不能为空！');
-            return;
-        }
-
-        try {
-            await this.request(`/admin/users/${this.selectedUser.id}/password`, {
-                method: 'PUT',
-                body: JSON.stringify({ password })
-            });
-            alert('密码修改成功！');
-            closeModal('changePasswordModal');
-            document.getElementById('changePassword').value = '';
-        } catch (error) {
-            console.error('修改密码失败:', error);
-            alert('修改密码失败: ' + error.message);
+            alert(error.message);
         }
     },
 
     showEditUserModal() {
-        if (!this.selectedUser) {
-            alert('请先选择用户！');
+        if (this.selectedUser && this.selectedUser.username === 'xiaoqimate') {
+            alert('超级管理员不允许修改信息');
             return;
         }
         document.getElementById('editCompanyName').value = this.selectedUser.company_name || '';
@@ -415,20 +319,48 @@ const AdminApp = {
                     companyWechat
                 })
             });
-            alert('更新成功！');
-            closeModal('editUserModal');
+
+            alert('修改成功');
+            this.closeModal('editUserModal');
             this.loadUsers();
-            this.selectedUser = this.users.find(u => u.id === this.selectedUser.id);
-            this.renderUserDetail();
         } catch (error) {
-            console.error('更新用户失败:', error);
-            alert('更新用户失败: ' + error.message);
+            alert(error.message);
+        }
+    },
+
+    showChangePasswordModal() {
+        if (this.selectedUser && this.selectedUser.username === 'xiaoqimate') {
+            alert('超级管理员不允许修改密码');
+            return;
+        }
+        document.getElementById('changePassword').value = '';
+        document.getElementById('changePasswordModal').classList.add('active');
+    },
+
+    async changePassword() {
+        const password = document.getElementById('changePassword').value;
+
+        if (!password) {
+            alert('请填写新密码');
+            return;
+        }
+
+        try {
+            await this.request(`/admin/users/${this.selectedUser.id}/password`, {
+                method: 'PUT',
+                body: JSON.stringify({ password })
+            });
+
+            alert('修改成功');
+            this.closeModal('changePasswordModal');
+        } catch (error) {
+            alert(error.message);
         }
     },
 
     showDeleteUserModal() {
-        if (!this.selectedUser) {
-            alert('请先选择用户！');
+        if (this.selectedUser && this.selectedUser.username === 'xiaoqimate') {
+            alert('超级管理员不允许删除');
             return;
         }
         document.getElementById('deleteUserModal').classList.add('active');
@@ -439,95 +371,77 @@ const AdminApp = {
             await this.request(`/admin/users/${this.selectedUser.id}`, {
                 method: 'DELETE'
             });
-            alert('删除成功！');
-            closeModal('deleteUserModal');
+
+            alert('删除成功');
+            this.closeModal('deleteUserModal');
             this.selectedUser = null;
-            this.loadUsers();
             this.renderUserDetail();
+            this.loadUsers();
         } catch (error) {
-            console.error('删除用户失败:', error);
-            alert('删除用户失败: ' + error.message);
-        }
-    },
-
-    async exportUserData() {
-        if (!this.selectedUser) {
-            alert('请先选择用户！');
-            return;
-        }
-
-        try {
-            const data = await this.request(`/admin/users/${this.selectedUser.id}/export`);
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${this.selectedUser.username}_backup_${new Date().toISOString().slice(0,10)}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-            alert('导出成功！');
-        } catch (error) {
-            console.error('导出失败:', error);
-            alert('导出失败: ' + error.message);
+            alert(error.message);
         }
     },
 
     showImportModal() {
+        if (this.selectedUser && this.selectedUser.username === 'xiaoqimate') {
+            alert('超级管理员需要先初始化数据库才能导入数据');
+            return;
+        }
         document.getElementById('importModal').classList.add('active');
     },
 
     async importData() {
         const fileInput = document.getElementById('importFile');
-        const password = document.getElementById('importPassword').value;
+        const passwordInput = document.getElementById('importPassword');
         
-        if (!fileInput.files || fileInput.files.length === 0) {
-            alert('请选择文件！');
-            return;
-        }
-        
-        if (!password) {
-            alert('请设置密码！');
+        if (!fileInput.files[0] || !passwordInput.value) {
+            alert('请选择文件并设置密码');
             return;
         }
 
         const file = fileInput.files[0];
         const reader = new FileReader();
-        
+
         reader.onload = async (e) => {
             try {
-                const data = JSON.parse(e.target.result);
-                data.password = password;
-                
+                const importData = JSON.parse(e.target.result);
+                importData.password = passwordInput.value;
+
                 await this.request('/admin/users/import', {
                     method: 'POST',
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(importData)
                 });
-                
-                alert('导入成功！');
-                closeModal('importModal');
-                this.clearImportForm();
+
+                alert('导入成功');
+                this.closeModal('importModal');
                 this.loadUsers();
             } catch (error) {
-                console.error('导入失败:', error);
                 alert('导入失败: ' + error.message);
             }
         };
-        
+
         reader.readAsText(file);
     },
 
-    clearImportForm() {
-        document.getElementById('importFile').value = '';
-        document.getElementById('importPassword').value = '';
-    },
+    async exportUserData() {
+        try {
+            const data = await this.request(`/admin/users/${this.selectedUser.id}/export`);
+            
+            if (data.message) {
+                alert(data.message);
+                return;
+            }
 
-    logout() {
-        localStorage.removeItem('zhangben_token');
-        this.token = null;
-        this.users = [];
-        this.selectedUser = null;
-        this.selectedNotebook = null;
-        this.showLoginPage();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${this.selectedUser.username}_export_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            alert('导出失败: ' + error.message);
+        }
     },
 
     closeModal(modalId) {
@@ -535,17 +449,20 @@ const AdminApp = {
     },
 
     bindModalEvents() {
-        // 点击弹窗外部关闭
         document.addEventListener('click', (e) => {
             if (e.target.classList.contains('modal')) {
                 e.target.classList.remove('active');
             }
         });
+    },
+
+    logout() {
+        localStorage.removeItem('zhangben_token');
+        this.token = null;
+        location.href = 'index.html';
     }
 };
 
-// 初始化
 document.addEventListener('DOMContentLoaded', () => {
     AdminApp.init();
-    AdminApp.bindModalEvents();
 });

@@ -393,6 +393,14 @@ const App = {
         try {
             const data = await Storage.login(username, password);
             this.currentUser = data.user;
+            
+            // 判断是否是管理员，如果是直接跳转到后台管理
+            if (data.user.isAdmin || data.user.username === 'xiaoqimate') {
+                location.href = 'admin.html';
+                return;
+            }
+            
+            // 普通用户进入用户界面
             this.showPage('home-page');
             await this.loadNotebooks();
             await this.checkAdminStatus();
