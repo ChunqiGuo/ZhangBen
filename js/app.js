@@ -604,10 +604,50 @@ const App = {
             document.getElementById('customer-section').classList.add('collapsed');
             document.getElementById('customer-toggle').classList.add('collapsed');
             
+            // 添加客户信息自动保存监听
+            this.setupCustomerInfoAutoSave();
+            
             await this.loadDayData();
             await this.loadCompanyInfo();
         } catch (error) {
             alert('打开账本失败: ' + error.message);
+        }
+    },
+    
+    setupCustomerInfoAutoSave() {
+        const inputs = ['customer-name', 'customer-phone', 'customer-contact', 'customer-address'];
+        let saveTimeout;
+        
+        inputs.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', () => {
+                    // 清除之前的定时器
+                    if (saveTimeout) clearTimeout(saveTimeout);
+                    
+                    // 延迟500ms保存，避免频繁请求
+                    saveTimeout = setTimeout(() => {
+                        this.saveCustomerInfo();
+                    }, 500);
+                });
+            }
+        });
+    },
+    
+    async saveCustomerInfo() {
+        if (!this.currentNotebook) return;
+        
+        const customerData = {
+            customer_name: document.getElementById('customer-name').value || '',
+            customer_phone: document.getElementById('customer-phone').value || '',
+            customer_contact: document.getElementById('customer-contact').value || '',
+            customer_address: document.getElementById('customer-address').value || ''
+        };
+        
+        try {
+            await Storage.saveCustomerInfo(this.currentNotebook.id, customerData);
+        } catch (error) {
+            console.error('保存客户信息失败:', error);
         }
     },
 
@@ -647,6 +687,11 @@ const App = {
         tbody.innerHTML = records.map((r, index) => {
             const amount = parseFloat(r.amount) || 0;
             total += amount;
+            // 截断备注显示，最多10个字符加...
+            let displayRemark = r.remark;
+            if (displayRemark && displayRemark.length > 10) {
+                displayRemark = displayRemark.substring(0, 10) + '...';
+            }
             return `
                 <tr data-record-id="${r.id}" style="height: 50px;">
                     <td>${r.category}</td>
@@ -654,7 +699,7 @@ const App = {
                     <td>${r.unit}</td>
                     <td>${r.quantity}</td>
                     <td>${r.amount}</td>
-                    <td style="cursor: pointer;" onclick="event.stopPropagation(); App.showEditRemarkModal(${r.id}, '${r.remark.replace(/'/g, "\\'")}')">${r.remark || '<span style="color:#999;">点击添加备注</span>'}</td>
+                    <td style="cursor: pointer;" onclick="event.stopPropagation(); App.showEditRemarkModal(${r.id}, '${r.remark.replace(/'/g, "\\'")}')">${displayRemark || '<span style="color:#999;">点击添加备注</span>'}</td>
                 </tr>
             `;
         }).join('');
@@ -890,6 +935,9 @@ const App = {
     },
 
     showEditRemarkModal(recordId, currentRemark) {
+        // 保存原始备注，用于比较
+        this._originalRemark = currentRemark;
+        
         const content = `
             <h2>编辑备注</h2>
             <div class="modal-form-group">
@@ -905,9 +953,21 @@ const App = {
     },
 
     async updateRecordRemark(recordId) {
-        const remark = document.getElementById('edit-remark-input').value || '';
+        const newRemark = document.getElementById('edit-remark-input').value || '';
+        
+        // 检查是否有修改
+        if (newRemark === this._originalRemark) {
+            this.closeModal();
+            return;
+        }
+        
+        // 确认保存
+        if (!confirm('确定要保存备注修改吗？')) {
+            return;
+        }
+        
         try {
-            await Storage.updateRecord(recordId, { remark });
+            await Storage.updateRecord(recordId, { remark: newRemark });
             this.closeModal();
             await this.loadDayData();
         } catch (error) {
@@ -1142,8 +1202,374 @@ const App = {
         }
     },
 
-    preparePrint() {
-        window.print();
+    async preparePrint() {
+        try {
+            const records = await Storage.getRecords(this.currentNotebook.id, this.currentDate);
+            const userProfile = await Storage.getUserProfile();
+            
+            let totalAmount = 0;
+            records.forEach(r => {
+                totalAmount += parseFloat(r.amount) || 0;
+            });
+            
+            // 转换为中文大写金额
+            const capitalAmount = this.convertToChineseCapital(totalAmount);
+            
+            // 创建打印模板
+            const printContent = this.createDeliveryNoteTemplate(
+                userProfile,
+                records,
+                totalAmount,
+                capitalAmount
+            );
+            
+            // 创建临时打印窗口
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>送货单</title>
+                    <style>
+                        * {
+                            margin: 0;
+                            padding: 0;
+                            box-sizing: border-box;
+                        }
+                        
+                        body {
+                            font-family: "SimSun", "宋体", sans-serif;
+                            font-size: 14px;
+                            line-height: 1.5;
+                        }
+                        
+                        .delivery-note {
+                            width: 241mm;
+                            height: 93mm;
+                            padding: 8mm;
+                            margin: 0 auto;
+                        }
+                        
+                        @media print {
+                            .delivery-note {
+                                width: 241mm;
+                                height: 93mm;
+                                padding: 8mm;
+                            }
+                            
+                            @page {
+                                size: 241mm 93mm;
+                                margin: 0;
+                            }
+                        }
+                        
+                        .note-header {
+                            text-align: center;
+                            margin-bottom: 8px;
+                        }
+                        
+                        .note-title {
+                            font-size: 24px;
+                            font-weight: bold;
+                            letter-spacing: 8px;
+                            margin-bottom: 4px;
+                        }
+                        
+                        .note-no {
+                            font-size: 12px;
+                            color: #666;
+                        }
+                        
+                        .info-section {
+                            display: flex;
+                            justify-content: space-between;
+                            margin-bottom: 6px;
+                            font-size: 13px;
+                        }
+                        
+                        .info-left, .info-right {
+                            width: 48%;
+                        }
+                        
+                        .info-row {
+                            margin-bottom: 3px;
+                        }
+                        
+                        .info-label {
+                            display: inline-block;
+                            width: 60px;
+                            font-weight: bold;
+                        }
+                        
+                        .goods-table {
+                            width: 100%;
+                            border-collapse: collapse;
+                            margin-bottom: 6px;
+                            font-size: 12px;
+                        }
+                        
+                        .goods-table th,
+                        .goods-table td {
+                            border: 1px solid #000;
+                            padding: 4px 3px;
+                            text-align: center;
+                        }
+                        
+                        .goods-table th {
+                            background-color: #f0f0f0;
+                            font-weight: bold;
+                        }
+                        
+                        .col-no { width: 8%; }
+                        .col-name { width: 32%; }
+                        .col-unit { width: 10%; }
+                        .col-quantity { width: 10%; }
+                        .col-price { width: 15%; }
+                        .col-amount { width: 15%; }
+                        .col-remark { width: 10%; }
+                        
+                        .total-section {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                            font-size: 13px;
+                            margin-bottom: 6px;
+                        }
+                        
+                        .total-left {
+                            flex: 1;
+                        }
+                        
+                        .total-right {
+                            text-align: right;
+                        }
+                        
+                        .total-capital {
+                            font-weight: bold;
+                        }
+                        
+                        .signature-section {
+                            display: flex;
+                            justify-content: space-between;
+                            margin-top: 8px;
+                            font-size: 12px;
+                        }
+                        
+                        .signature-item {
+                            text-align: center;
+                        }
+                        
+                        .signature-line {
+                            border-bottom: 1px solid #000;
+                            width: 80px;
+                            margin: 0 auto 2px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    ${printContent}
+                </body>
+                </html>
+            `);
+            
+            printWindow.document.close();
+            printWindow.onload = () => {
+                printWindow.print();
+            };
+            
+        } catch (error) {
+            alert('准备打印失败: ' + error.message);
+        }
+    },
+    
+    createDeliveryNoteTemplate(userProfile, records, totalAmount, capitalAmount) {
+        const date = new Date(this.currentDate);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        
+        const companyName = userProfile.companyName || '';
+        const companyPhone = userProfile.companyPhone || '';
+        const customerName = document.getElementById('customer-name').value || '';
+        const customerPhone = document.getElementById('customer-phone').value || '';
+        const customerContact = document.getElementById('customer-contact').value || '';
+        const customerAddress = document.getElementById('customer-address').value || '';
+        
+        let goodsRows = '';
+        records.forEach((r, index) => {
+            goodsRows += `
+                <tr>
+                    <td class="col-no">${index + 1}</td>
+                    <td class="col-name">${r.category}</td>
+                    <td class="col-unit">${r.unit}</td>
+                    <td class="col-quantity">${r.quantity}</td>
+                    <td class="col-price">${r.price}</td>
+                    <td class="col-amount">${r.amount}</td>
+                    <td class="col-remark">${r.remark || ''}</td>
+                </tr>
+            `;
+        });
+        
+        // 如果记录不足，填充空行
+        const emptyRows = Math.max(0, 6 - records.length);
+        for (let i = 0; i < emptyRows; i++) {
+            goodsRows += `
+                <tr>
+                    <td class="col-no"></td>
+                    <td class="col-name"></td>
+                    <td class="col-unit"></td>
+                    <td class="col-quantity"></td>
+                    <td class="col-price"></td>
+                    <td class="col-amount"></td>
+                    <td class="col-remark"></td>
+                </tr>
+            `;
+        }
+        
+        return `
+            <div class="delivery-note">
+                <div class="note-header">
+                    <div class="note-title">送 货 单</div>
+                    <div class="note-no">${document.getElementById('bill-no').textContent}</div>
+                </div>
+                
+                <div class="info-section">
+                    <div class="info-left">
+                        <div class="info-row">
+                            <span class="info-label">客户名称：</span>
+                            <span>${customerName}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">联系电话：</span>
+                            <span>${customerPhone}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">联系人：</span>
+                            <span>${customerContact}</span>
+                        </div>
+                    </div>
+                    <div class="info-right">
+                        <div class="info-row">
+                            <span class="info-label">送货日期：</span>
+                            <span>${year}年${month}月${day}日</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">客户地址：</span>
+                            <span>${customerAddress}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <table class="goods-table">
+                    <thead>
+                        <tr>
+                            <th class="col-no">序号</th>
+                            <th class="col-name">产品名称</th>
+                            <th class="col-unit">单位</th>
+                            <th class="col-quantity">数量</th>
+                            <th class="col-price">单价</th>
+                            <th class="col-amount">金额</th>
+                            <th class="col-remark">备注</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${goodsRows}
+                    </tbody>
+                </table>
+                
+                <div class="total-section">
+                    <div class="total-left">
+                        <span class="total-capital">合计（大写）：${capitalAmount}</span>
+                    </div>
+                    <div class="total-right">
+                        小写：¥${totalAmount.toFixed(2)}
+                    </div>
+                </div>
+                
+                <div class="signature-section">
+                    <div class="signature-item">
+                        <div class="signature-line"></div>
+                        <div>制单人</div>
+                    </div>
+                    <div class="signature-item">
+                        <div class="signature-line"></div>
+                        <div>送货人</div>
+                    </div>
+                    <div class="signature-item">
+                        <div class="signature-line"></div>
+                        <div>收货人</div>
+                    </div>
+                    <div class="signature-item">
+                        <div class="signature-line"></div>
+                        <div>备注</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+    
+    convertToChineseCapital(num) {
+        const digits = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
+        const units = ['', '拾', '佰', '仟'];
+        const bigUnits = ['', '万', '亿'];
+        
+        if (num === 0) return '零元整';
+        
+        // 处理整数部分
+        let intPart = Math.floor(num);
+        let intStr = '';
+        
+        let unitIndex = 0;
+        while (intPart > 0) {
+            let part = intPart % 10000;
+            let partStr = '';
+            
+            let zeroFlag = true;
+            for (let i = 0; i < 4; i++) {
+                let digit = part % 10;
+                part = Math.floor(part / 10);
+                
+                if (digit === 0) {
+                    if (!zeroFlag) {
+                        partStr = '零' + partStr;
+                        zeroFlag = true;
+                    }
+                } else {
+                    partStr = digits[digit] + units[i] + partStr;
+                    zeroFlag = false;
+                }
+            }
+            
+            if (partStr !== '') {
+                intStr = partStr + bigUnits[unitIndex] + intStr;
+            }
+            unitIndex++;
+            intPart = Math.floor(intPart / 10000);
+        }
+        
+        if (intStr === '') intStr = '零';
+        intStr += '元';
+        
+        // 处理小数部分
+        let decPart = Math.round((num - Math.floor(num)) * 100);
+        let decStr = '';
+        
+        if (decPart === 0) {
+            decStr = '整';
+        } else {
+            let jiao = Math.floor(decPart / 10);
+            let fen = decPart % 10;
+            
+            if (jiao > 0) {
+                decStr += digits[jiao] + '角';
+            }
+            if (fen > 0) {
+                decStr += digits[fen] + '分';
+            }
+        }
+        
+        return intStr + decStr;
     },
 
     showModal(content) {
