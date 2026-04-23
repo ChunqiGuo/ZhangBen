@@ -751,12 +751,8 @@ const App = {
     async handleImageUpload(file) {
         if (!file) return;
 
-        const formData = new FormData();
-        formData.append('image', file);
-        formData.append('date', this.currentDate);
-
         try {
-            await Storage.uploadImage(this.currentNotebook.id, formData);
+            await Storage.uploadImage(this.currentNotebook.id, this.currentDate, file);
             await this.loadImages();
         } catch (error) {
             alert('上传图片失败: ' + error.message);
