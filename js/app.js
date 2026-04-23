@@ -487,15 +487,25 @@ const App = {
     },
 
     showStatisticsModal(notebookId) {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        
+        const formatDate = (date) => {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        };
+        
         const content = `
             <h2>统计总价</h2>
             <div class="modal-form-group">
                 <label>开始日期</label>
-                <input type="date" id="stat-start-date">
+                <input type="date" id="stat-start-date" value="${formatDate(firstDay)}">
             </div>
             <div class="modal-form-group">
                 <label>结束日期</label>
-                <input type="date" id="stat-end-date">
+                <input type="date" id="stat-end-date" value="${formatDate(today)}">
             </div>
             <div class="modal-buttons">
                 <button class="btn btn-secondary" onclick="App.closeModal()">取消</button>
@@ -516,17 +526,54 @@ const App = {
 
         try {
             const records = await Storage.getRecords(notebookId, startDate, endDate);
-            let total = 0;
+            
+            // 按日期分组统计
+            const dailyStats = {};
+            let grandTotal = 0;
+            
             records.forEach(r => {
-                total += parseFloat(r.amount) || 0;
+                const amount = parseFloat(r.amount) || 0;
+                if (!dailyStats[r.date]) {
+                    dailyStats[r.date] = 0;
+                }
+                dailyStats[r.date] += amount;
+                grandTotal += amount;
             });
             
-            const capitalAmount = this.convertToChineseCapital(total);
-            alert(`总价: ¥${total.toFixed(2)}\n（大写）${capitalAmount}`);
-            this.closeModal();
+            // 显示统计结果
+            this.showStatisticsResult(dailyStats, grandTotal, startDate, endDate);
         } catch (error) {
             alert('统计失败: ' + error.message);
         }
+    },
+
+    showStatisticsResult(dailyStats, grandTotal, startDate, endDate) {
+        const sortedDates = Object.keys(dailyStats).sort();
+        
+        const content = `
+            <h2>统计结果</h2>
+            <div style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+                ${sortedDates.length === 0 ? 
+                    '<p style="text-align: center; color: #999; padding: 20px;">该日期范围内没有记录</p>' :
+                    sortedDates.map(date => `
+                        <div style="display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #f0f0f0;">
+                            <span style="color: #666;">${date}</span>
+                            <span style="font-weight: 600; color: #333;">¥${dailyStats[date].toFixed(2)}</span>
+                        </div>
+                    `).join('')
+                }
+            </div>
+            <div style="background: var(--primary-gradient); padding: 15px; border-radius: 10px; color: #fff;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="opacity: 0.9;">合计</span>
+                    <span style="font-size: 24px; font-weight: 700;">¥${grandTotal.toFixed(2)}</span>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="App.closeModal()">关闭</button>
+            </div>
+        `;
+        this.showModal(content);
     },
 
     async deleteNotebook(notebookId) {
@@ -550,6 +597,13 @@ const App = {
             document.getElementById('notebook-title-display').textContent = notebook.name;
             document.getElementById('bill-no').textContent = this.generateBillNo();
             this.showPage('notebook-page');
+            
+            // 默认隐藏销售方和购买方信息
+            document.getElementById('company-section').classList.add('collapsed');
+            document.getElementById('company-toggle').classList.add('collapsed');
+            document.getElementById('customer-section').classList.add('collapsed');
+            document.getElementById('customer-toggle').classList.add('collapsed');
+            
             await this.loadDayData();
             await this.loadCompanyInfo();
         } catch (error) {
@@ -594,13 +648,13 @@ const App = {
             const amount = parseFloat(r.amount) || 0;
             total += amount;
             return `
-                <tr onclick="App.showRecordOptions(${index}, ${r.id})">
+                <tr>
                     <td>${r.category}</td>
                     <td>${r.price}</td>
                     <td>${r.unit}</td>
                     <td>${r.quantity}</td>
                     <td>${r.amount}</td>
-                    <td>${r.remark}</td>
+                    <td style="cursor: pointer;" onclick="App.showEditRemarkModal(${r.id}, '${r.remark.replace(/'/g, "\\'")}')">${r.remark || '<span style="color:#999;">点击添加备注</span>'}</td>
                 </tr>
             `;
         }).join('');
@@ -621,9 +675,12 @@ const App = {
                 <h2>选择产品</h2>
                 <div class="category-list">
                     ${categories.map(c => `
-                        <div class="category-item" onclick="App.selectCategory('${c.name}', ${c.price}, '${c.unit}')">
-                            <span>${c.name}</span>
-                            <span>¥${c.price}/${c.unit}</span>
+                        <div class="category-item" style="display: flex; align-items: center; justify-content: space-between;">
+                            <div style="flex: 1; cursor: pointer;" onclick="App.selectCategory('${c.name}', ${c.price}, '${c.unit}')">
+                                <span>${c.name}</span>
+                                <span>¥${c.price}/${c.unit}</span>
+                            </div>
+                            <button class="btn btn-icon" onclick="event.stopPropagation(); App.deleteCategory(${c.id})" style="background: #ff4d4f; padding: 4px 8px; margin-left: 10px;">删除</button>
                         </div>
                     `).join('')}
                 </div>
@@ -638,17 +695,58 @@ const App = {
         }
     },
 
+    async deleteCategory(categoryId) {
+        if (!confirm('确定要删除这个产品吗？')) return;
+        try {
+            await Storage.deleteCategory(categoryId);
+            await this.showCategoryListModal();
+        } catch (error) {
+            alert('删除失败: ' + error.message);
+        }
+    },
+
     selectCategory(name, price, unit) {
         this.closeModal();
-        this.addRecordFromCategory(name, price, unit);
+        this.showAddRecordModal(name, price, unit);
+    },
+
+    showAddRecordModal(category, price, unit) {
+        const content = `
+            <h2>添加记录</h2>
+            <div class="modal-form-group">
+                <label>产品</label>
+                <input type="text" value="${category}" disabled>
+            </div>
+            <div class="modal-form-group">
+                <label>单价</label>
+                <input type="text" value="¥${price}/${unit}" disabled>
+            </div>
+            <div class="modal-form-group">
+                <label>数量 *</label>
+                <input type="number" id="record-quantity" value="1" step="1" placeholder="请输入数量">
+            </div>
+            <div class="modal-form-group">
+                <label>备注</label>
+                <input type="text" id="record-remark" placeholder="请输入备注（选填）">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="App.closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="App.addRecordFromCategory('${category}', ${price}, '${unit}')">添加</button>
+            </div>
+        `;
+        this.showModal(content);
     },
 
     async addRecordFromCategory(category, price, unit) {
-        const quantity = prompt('数量:', '1');
-        if (quantity === null) return;
+        const quantity = document.getElementById('record-quantity').value;
+        const remark = document.getElementById('record-remark').value || '';
+
+        if (!quantity) {
+            alert('请输入数量');
+            return;
+        }
 
         const amount = (parseFloat(price) * parseFloat(quantity)).toFixed(2);
-        const remark = prompt('备注:', '') || '';
 
         const recordData = {
             date: this.currentDate,
@@ -662,6 +760,7 @@ const App = {
 
         try {
             await Storage.addRecord(this.currentNotebook.id, recordData);
+            this.closeModal();
             await this.loadDayData();
         } catch (error) {
             alert('添加记录失败: ' + error.message);
@@ -714,6 +813,9 @@ const App = {
         const content = `
             <h2>记录选项</h2>
             <div class="modal-buttons">
+                <button class="btn btn-primary" onclick="App.showEditRemarkModal(${recordId}, '')" style="width: 100%;">编辑备注</button>
+            </div>
+            <div class="modal-buttons" style="margin-top: 10px;">
                 <button class="btn btn-primary" onclick="App.deleteRecord(${recordId})" style="width: 100%; background: #ff4d4f;">删除记录</button>
             </div>
             <div class="modal-buttons" style="margin-top: 10px;">
@@ -721,6 +823,32 @@ const App = {
             </div>
         `;
         this.showModal(content);
+    },
+
+    showEditRemarkModal(recordId, currentRemark) {
+        const content = `
+            <h2>编辑备注</h2>
+            <div class="modal-form-group">
+                <label>备注</label>
+                <input type="text" id="edit-remark-input" value="${currentRemark}" placeholder="请输入备注">
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="App.closeModal()">取消</button>
+                <button class="btn btn-primary" onclick="App.updateRecordRemark(${recordId})">保存</button>
+            </div>
+        `;
+        this.showModal(content);
+    },
+
+    async updateRecordRemark(recordId) {
+        const remark = document.getElementById('edit-remark-input').value || '';
+        try {
+            await Storage.updateRecord(recordId, { remark });
+            this.closeModal();
+            await this.loadDayData();
+        } catch (error) {
+            alert('更新备注失败: ' + error.message);
+        }
     },
 
     async deleteRecord(recordId) {

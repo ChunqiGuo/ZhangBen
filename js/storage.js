@@ -95,8 +95,11 @@ const Storage = {
     },
 
     // 账单记录
-    async getRecords(notebookId, date) {
-        return await this.request(`/notebooks/${notebookId}/records?date=${date}`);
+    async getRecords(notebookId, dateOrStart, endDate) {
+        if (endDate) {
+            return await this.request(`/notebooks/${notebookId}/records?startDate=${dateOrStart}&endDate=${endDate}`);
+        }
+        return await this.request(`/notebooks/${notebookId}/records?date=${dateOrStart}`);
     },
 
     async addRecord(notebookId, recordData) {
