@@ -648,42 +648,106 @@ const App = {
             const amount = parseFloat(r.amount) || 0;
             total += amount;
             return `
-                <tr>
+                <tr data-record-id="${r.id}" style="height: 50px;">
                     <td>${r.category}</td>
                     <td>${r.price}</td>
                     <td>${r.unit}</td>
                     <td>${r.quantity}</td>
                     <td>${r.amount}</td>
-                    <td style="cursor: pointer;" onclick="App.showEditRemarkModal(${r.id}, '${r.remark.replace(/'/g, "\\'")}')">${r.remark || '<span style="color:#999;">点击添加备注</span>'}</td>
+                    <td style="cursor: pointer;" onclick="event.stopPropagation(); App.showEditRemarkModal(${r.id}, '${r.remark.replace(/'/g, "\\'")}')">${r.remark || '<span style="color:#999;">点击添加备注</span>'}</td>
                 </tr>
             `;
         }).join('');
 
+        // 添加长按事件监听
+        this.addRecordLongPressEvents();
+
         document.getElementById('total-amount').textContent = '¥' + total.toFixed(2);
+    },
+
+    addRecordLongPressEvents() {
+        const tbody = document.getElementById('bill-records-tbody');
+        if (!tbody) return;
+        
+        let longPressTimer = null;
+        let currentRecordId = null;
+        
+        const rows = tbody.querySelectorAll('tr[data-record-id]');
+        rows.forEach(row => {
+            row.addEventListener('mousedown', (e) => {
+                currentRecordId = row.dataset.recordId;
+                longPressTimer = setTimeout(() => {
+                    this.showRecordOptions(0, currentRecordId);
+                }, 500);
+            });
+            
+            row.addEventListener('mouseup', () => {
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+            });
+            
+            row.addEventListener('mouseleave', () => {
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+            });
+            
+            // 移动端触摸事件
+            row.addEventListener('touchstart', (e) => {
+                currentRecordId = row.dataset.recordId;
+                longPressTimer = setTimeout(() => {
+                    this.showRecordOptions(0, currentRecordId);
+                }, 500);
+            });
+            
+            row.addEventListener('touchend', () => {
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+            });
+            
+            row.addEventListener('touchmove', () => {
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+            });
+        });
     },
 
     async showCategoryListModal() {
         try {
             const categories = await Storage.getCategories(this.currentNotebook.id);
-            if (categories.length === 0) {
-                alert('请先添加产品类目');
-                this.showAddCategoryModal();
-                return;
-            }
 
-            const content = `
-                <h2>选择产品</h2>
-                <div class="category-list">
-                    ${categories.map(c => `
-                        <div class="category-item" style="display: flex; align-items: center; justify-content: space-between;">
-                            <div style="flex: 1; cursor: pointer;" onclick="App.selectCategory('${c.name}', ${c.price}, '${c.unit}')">
-                                <span>${c.name}</span>
-                                <span>¥${c.price}/${c.unit}</span>
+            let content = '<h2>选择产品</h2>';
+            
+            if (categories.length === 0) {
+                content += `
+                    <div style="text-align: center; padding: 20px; color: #999;">
+                        暂无产品
+                    </div>
+                `;
+            } else {
+                content += `
+                    <div class="category-list">
+                        ${categories.map(c => `
+                            <div class="category-item" style="display: flex; align-items: center; justify-content: space-between;">
+                                <div style="flex: 1; cursor: pointer;" onclick="App.selectCategory('${c.name}', ${c.price}, '${c.unit}')">
+                                    <span>${c.name}</span>
+                                    <span>¥${c.price}/${c.unit}</span>
+                                </div>
+                                <button class="btn btn-icon" onclick="event.stopPropagation(); App.deleteCategory(${c.id})" style="background: #ff4d4f; padding: 4px 8px; margin-left: 10px;">删除</button>
                             </div>
-                            <button class="btn btn-icon" onclick="event.stopPropagation(); App.deleteCategory(${c.id})" style="background: #ff4d4f; padding: 4px 8px; margin-left: 10px;">删除</button>
-                        </div>
-                    `).join('')}
-                </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+            
+            content += `
                 <div class="modal-buttons" style="margin-top: 10px;">
                     <button class="btn btn-secondary" onclick="App.showAddCategoryModal()">添加新产品</button>
                     <button class="btn btn-secondary" onclick="App.closeModal()">取消</button>
@@ -880,11 +944,73 @@ const App = {
         if (!file) return;
 
         try {
-            await Storage.uploadImage(this.currentNotebook.id, this.currentDate, file);
+            // 压缩图片
+            const compressedFile = await this.compressImage(file);
+            await Storage.uploadImage(this.currentNotebook.id, this.currentDate, compressedFile);
             await this.loadImages();
         } catch (error) {
             alert('上传图片失败: ' + error.message);
         }
+    },
+
+    compressImage(file) {
+        return new Promise((resolve, reject) => {
+            const maxWidth = 1920;
+            const maxHeight = 1080;
+            const quality = 0.7;
+            
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                
+                img.onload = () => {
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    // 计算缩放比例
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width = Math.floor(width * ratio);
+                        height = Math.floor(height * ratio);
+                    }
+                    
+                    // 创建画布
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    // 转换为 Blob
+                    canvas.toBlob((blob) => {
+                        if (!blob) {
+                            reject(new Error('图片压缩失败'));
+                            return;
+                        }
+                        
+                        // 创建新的 File 对象
+                        const compressedFile = new File([blob], file.name, {
+                            type: 'image/jpeg',
+                            lastModified: Date.now()
+                        });
+                        
+                        resolve(compressedFile);
+                    }, 'image/jpeg', quality);
+                };
+                
+                img.onerror = () => {
+                    reject(new Error('图片加载失败'));
+                };
+            };
+            
+            reader.onerror = () => {
+                reject(new Error('文件读取失败'));
+            };
+        });
     },
 
     async loadImages() {
@@ -905,13 +1031,90 @@ const App = {
             }
 
             container.innerHTML = images.map(img => `
-                <div class="image-item" onclick="App.showImageOptions(${img.id})">
+                <div class="image-item" data-image-id="${img.id}" data-filename="${img.filename}">
                     <img src="/uploads/${img.filename}" alt="单据图片">
                 </div>
             `).join('');
+            
+            // 添加图片事件监听
+            this.addImageEvents();
         } catch (error) {
             console.error('加载图片失败:', error);
         }
+    },
+
+    addImageEvents() {
+        const container = document.getElementById('image-list');
+        if (!container) return;
+        
+        const items = container.querySelectorAll('.image-item');
+        items.forEach(item => {
+            let longPressTimer = null;
+            const imageId = item.dataset.imageId;
+            const filename = item.dataset.filename;
+            
+            // 点击放大
+            item.addEventListener('click', (e) => {
+                if (!longPressTimer) { // 只有不是长按才放大
+                    this.showImagePreview(filename);
+                }
+                longPressTimer = null;
+            });
+            
+            // 长按删除
+            item.addEventListener('mousedown', (e) => {
+                longPressTimer = setTimeout(() => {
+                    longPressTimer = 'longpress';
+                    this.showImageOptions(imageId);
+                }, 500);
+            });
+            
+            item.addEventListener('mouseup', () => {
+                if (longPressTimer && longPressTimer !== 'longpress') {
+                    clearTimeout(longPressTimer);
+                }
+                longPressTimer = null;
+            });
+            
+            item.addEventListener('mouseleave', () => {
+                if (longPressTimer && longPressTimer !== 'longpress') {
+                    clearTimeout(longPressTimer);
+                }
+                longPressTimer = null;
+            });
+            
+            // 移动端触摸事件
+            item.addEventListener('touchstart', (e) => {
+                longPressTimer = setTimeout(() => {
+                    longPressTimer = 'longpress';
+                    this.showImageOptions(imageId);
+                }, 500);
+            });
+            
+            item.addEventListener('touchend', (e) => {
+                if (longPressTimer && longPressTimer !== 'longpress') {
+                    clearTimeout(longPressTimer);
+                    this.showImagePreview(filename);
+                }
+                longPressTimer = null;
+            });
+            
+            item.addEventListener('touchmove', () => {
+                if (longPressTimer && longPressTimer !== 'longpress') {
+                    clearTimeout(longPressTimer);
+                }
+                longPressTimer = null;
+            });
+        });
+    },
+
+    showImagePreview(filename) {
+        const content = `
+            <div class="image-preview-modal" onclick="App.closeModal()">
+                <img src="/uploads/${filename}" alt="放大图片" style="max-width: 95%; max-height: 95%; border-radius: 10px;">
+            </div>
+        `;
+        this.showModal(content);
     },
 
     showImageOptions(imageId) {
