@@ -40,6 +40,10 @@ const App = {
             this.showColorPickerModal();
         });
 
+        document.getElementById('admin-btn').addEventListener('click', () => {
+            location.href = 'admin.html';
+        });
+
         document.getElementById('settings-btn').addEventListener('click', () => {
             this.showSettingsModal();
         });
@@ -341,6 +345,7 @@ const App = {
                 this.currentUser = user;
                 this.showPage('home-page');
                 await this.loadNotebooks();
+                await this.checkAdminStatus();
                 if (!user.companyName && !user.companyPhone && !user.companyAddress && !user.companyWechat) {
                     setTimeout(() => {
                         this.showSettingsModal();
@@ -352,6 +357,20 @@ const App = {
             }
         } else {
             this.showPage('login-page');
+        }
+    },
+
+    async checkAdminStatus() {
+        try {
+            await Storage.request('/admin/users', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            document.getElementById('admin-btn').style.display = 'block';
+        } catch (error) {
+            document.getElementById('admin-btn').style.display = 'none';
         }
     },
 
@@ -376,6 +395,7 @@ const App = {
             this.currentUser = data.user;
             this.showPage('home-page');
             await this.loadNotebooks();
+            await this.checkAdminStatus();
             if (!data.user.companyName && !data.user.companyPhone && !data.user.companyAddress && !data.user.companyWechat) {
                 setTimeout(() => {
                     this.showSettingsModal();

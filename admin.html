@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>账本后台管理系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+
+        .login-page {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header .login-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .login-header h1 {
+            font-size: 24px;
+            color: #333;
+        }
+
+        .login-form-group {
+            margin-bottom: 20px;
+        }
+
+        .login-form-group input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e8e8e8;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .login-form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            display: none;
+        }
+
+        .container.active {
+            display: block;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #45a049;
+        }
+
+        .btn-secondary {
+            background: #2196F3;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #1976D2;
+        }
+
+        .btn-danger {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #d32f2f;
+        }
+
+        .btn-warning {
+            background: #FF9800;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #F57C00;
+        }
+
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+        }
+
+        .sidebar {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            height: fit-content;
+        }
+
+        .sidebar h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .user-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .user-item {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-radius: 5px;
+        }
+
+        .user-item:hover {
+            background: #f0f0f0;
+        }
+
+        .user-item.active {
+            background: #e3f2fd;
+            border-left: 3px solid #2196F3;
+        }
+
+        .user-item .username {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .user-item .stats {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .content-area {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+            color: #333;
+        }
+
+        .user-info {
+            margin-bottom: 30px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-item {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+        }
+
+        .info-item label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .info-item .value {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .user-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .notebook-list {
+            margin-bottom: 30px;
+        }
+
+        .notebook-item {
+            border: 1px solid #eee;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .notebook-item:hover {
+            border-color: #2196F3;
+            background: #f9f9f9;
+        }
+
+        .notebook-item.active {
+            border-color: #2196F3;
+            background: #e3f2fd;
+        }
+
+        .notebook-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .notebook-name {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .notebook-stats {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .records-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .records-table th,
+        .records-table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+
+        .records-table th {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+
+        .records-table tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .modal-footer {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 50px;
+            color: #999;
+        }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #eee;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            border-bottom-color: #2196F3;
+            color: #2196F3;
+            font-weight: bold;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- 登录页面 -->
+    <div id="loginPage" class="login-page">
+        <div class="login-container">
+            <div class="login-header">
+                <div class="login-icon">🔧</div>
+                <h1>账本后台管理系统</h1>
+            </div>
+            <form id="loginForm">
+                <div class="login-form-group">
+                    <input type="text" id="adminUsername" placeholder="用户名" required>
+                </div>
+                <div class="login-form-group">
+                    <input type="password" id="adminPassword" placeholder="密码" required>
+                </div>
+                <button type="submit" class="login-btn">登录</button>
+            </form>
+            <a href="index.html" class="back-link">返回前台</a>
+        </div>
+    </div>
+
+    <!-- 管理页面 -->
+    <div id="adminPage" class="container">
+        <div class="header">
+            <h1>📊 账本后台管理系统</h1>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="AdminApp.showCreateUserModal()">+ 创建账号</button>
+                <button class="btn btn-secondary" onclick="AdminApp.showImportModal()">📥 导入数据</button>
+                <button class="btn btn-warning" onclick="location.href='index.html'">返回前台</button>
+                <button class="btn btn-danger" onclick="AdminApp.logout()">退出登录</button>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="sidebar">
+                <h3>用户列表</h3>
+                <div class="user-list" id="userList">
+                    <div class="empty-state">加载中...</div>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <div class="empty-state" id="emptyState">
+                    请选择一个用户查看详情
+                </div>
+                <div id="userDetail" style="display: none;">
+                    <div class="section-title">用户详情</div>
+                    <div class="user-info" id="userInfo"></div>
+                    
+                    <div class="tabs">
+                        <div class="tab active" onclick="AdminApp.switchTab('notebooks')">账本列表</div>
+                        <div class="tab" onclick="AdminApp.switchTab('actions')">用户操作</div>
+                    </div>
+                    
+                    <div id="tab-notebooks" class="tab-content active">
+                        <div class="notebook-list" id="notebookList"></div>
+                        <div id="recordsView" style="display: none;">
+                            <div class="section-title" style="margin-top: 20px;">
+                                <button class="btn btn-sm btn-secondary" onclick="AdminApp.hideRecords()">← 返回</button>
+                                账本记录
+                            </div>
+                            <div class="records-container" id="recordsContainer"></div>
+                        </div>
+                    </div>
+                    
+                    <div id="tab-actions" class="tab-content">
+                        <div class="user-actions" id="userActions"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建用户弹窗 -->
+    <div class="modal" id="createUserModal">
+        <div class="modal-content">
+            <div class="modal-header">创建新账号</div>
+            <div class="form-group">
+                <label>用户名 *</label>
+                <input type="text" id="newUsername" placeholder="请输入用户名">
+            </div>
+            <div class="form-group">
+                <label>密码 *</label>
+                <input type="password" id="newPassword" placeholder="请输入密码">
+            </div>
+            <div class="form-group">
+                <label>公司名称</label>
+                <input type="text" id="newCompanyName" placeholder="请输入公司名称">
+            </div>
+            <div class="form-group">
+                <label>联系电话</label>
+                <input type="text" id="newCompanyPhone" placeholder="请输入联系电话">
+            </div>
+            <div class="form-group">
+                <label>地址</label>
+                <input type="text" id="newCompanyAddress" placeholder="请输入地址">
+            </div>
+            <div class="form-group">
+                <label>微信号</label>
+                <input type="text" id="newCompanyWechat" placeholder="请输入微信号">
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="AdminApp.closeModal('createUserModal')">取消</button>
+                <button class="btn btn-primary" onclick="AdminApp.createUser()">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改密码弹窗 -->
+    <div class="modal" id="changePasswordModal">
+        <div class="modal-content">
+            <div class="modal-header">修改密码</div>
+            <div class="form-group">
+                <label>新密码 *</label>
+                <input type="password" id="changePassword" placeholder="请输入新密码">
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="AdminApp.closeModal('changePasswordModal')">取消</button>
+                <button class="btn btn-primary" onclick="AdminApp.changePassword()">确认修改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改用户信息弹窗 -->
+    <div class="modal" id="editUserModal">
+        <div class="modal-content">
+            <div class="modal-header">修改用户信息</div>
+            <div class="form-group">
+                <label>公司名称</label>
+                <input type="text" id="editCompanyName" placeholder="请输入公司名称">
+            </div>
+            <div class="form-group">
+                <label>联系电话</label>
+                <input type="text" id="editCompanyPhone" placeholder="请输入联系电话">
+            </div>
+            <div class="form-group">
+                <label>地址</label>
+                <input type="text" id="editCompanyAddress" placeholder="请输入地址">
+            </div>
+            <div class="form-group">
+                <label>微信号</label>
+                <input type="text" id="editCompanyWechat" placeholder="请输入微信号">
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="AdminApp.closeModal('editUserModal')">取消</button>
+                <button class="btn btn-primary" onclick="AdminApp.updateUser()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认弹窗 -->
+    <div class="modal" id="deleteUserModal">
+        <div class="modal-content">
+            <div class="modal-header">确认删除</div>
+            <p>确定要删除该用户吗？此操作不可恢复！</p>
+            <div class="modal-footer">
+                <button class="btn" onclick="AdminApp.closeModal('deleteUserModal')">取消</button>
+                <button class="btn btn-danger" onclick="AdminApp.deleteUser()">确认删除</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导入数据弹窗 -->
+    <div class="modal" id="importModal">
+        <div class="modal-content">
+            <div class="modal-header">导入数据</div>
+            <div class="form-group">
+                <label>JSON数据文件</label>
+                <input type="file" id="importFile" accept=".json">
+            </div>
+            <div class="form-group">
+                <label>新用户密码 *</label>
+                <input type="password" id="importPassword" placeholder="请设置新用户的密码">
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="AdminApp.closeModal('importModal')">取消</button>
+                <button class="btn btn-primary" onclick="AdminApp.importData()">导入</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/admin.js"></script>
+</body>
+</html>
