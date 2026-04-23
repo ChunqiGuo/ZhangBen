@@ -580,7 +580,7 @@ const App = {
     },
 
     renderRecords(records) {
-        const tbody = document.querySelector('#records-table tbody');
+        const tbody = document.getElementById('bill-records-tbody');
         if (!tbody) return;
 
         if (records.length === 0) {
