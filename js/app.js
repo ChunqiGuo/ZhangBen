@@ -770,6 +770,11 @@ const App = {
             const images = await Storage.getImages(this.currentNotebook.id, this.currentDate);
             const container = document.getElementById('image-list');
             
+            if (!container) {
+                console.warn('图片容器未找到');
+                return;
+            }
+            
             if (images.length === 0) {
                 container.innerHTML = '';
                 return;
