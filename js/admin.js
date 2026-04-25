@@ -5,6 +5,7 @@ const AdminApp = {
     users: [],
     selectedUser: null,
     selectedNotebook: null,
+    imagesByDate: {},
 
     init() {
         this.token = localStorage.getItem('zhangben_token');
@@ -190,7 +191,20 @@ const AdminApp = {
         }
 
         try {
+            // 加载记录
             const records = await this.request(`/admin/notebooks/${this.selectedNotebook.id}/records`);
+            // 加载所有图片
+            const images = await this.request(`/admin/notebooks/${this.selectedNotebook.id}/images`);
+            
+            // 按日期分组图片
+            this.imagesByDate = {};
+            images.forEach(img => {
+                if (!this.imagesByDate[img.date]) {
+                    this.imagesByDate[img.date] = [];
+                }
+                this.imagesByDate[img.date].push(img);
+            });
+
             recordsView.style.display = 'block';
 
             if (records.length === 0) {
@@ -209,10 +223,13 @@ const AdminApp = {
                             <th>数量</th>
                             <th>金额</th>
                             <th>备注</th>
+                            <th>图片</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${records.map(record => `
+                        ${records.map(record => {
+                            const dateImages = this.imagesByDate[record.date] || [];
+                            return `
                             <tr>
                                 <td>${record.date || '-'}</td>
                                 <td>${record.category || '-'}</td>
@@ -221,8 +238,18 @@ const AdminApp = {
                                 <td>${record.quantity || '-'}</td>
                                 <td>${record.amount || '-'}</td>
                                 <td>${record.remark || '-'}</td>
+                                <td>
+                                    <div class="images-preview">
+                                        ${dateImages.length > 0 ? 
+                                            dateImages.slice(0, 3).map(img => `
+                                                <img src="${img.url}" class="preview-img" onclick="AdminApp.showImageModal('${img.url}')" />
+                                            `).join('') + (dateImages.length > 3 ? `<span class="more-images">+${dateImages.length - 3}</span>` : '') 
+                                            : '-'
+                                        }
+                                    </div>
+                                </td>
                             </tr>
-                        `).join('')}
+                        `}).join('')}
                     </tbody>
                 </table>
             `;
@@ -454,6 +481,17 @@ const AdminApp = {
                 e.target.classList.remove('active');
             }
         });
+    },
+
+    showImageModal(imageUrl) {
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('imageModalImg');
+        modalImg.src = imageUrl;
+        modal.classList.add('active');
+    },
+
+    closeImageModal() {
+        document.getElementById('imageModal').classList.remove('active');
     },
 
     logout() {

@@ -359,7 +359,6 @@
             <div class="header-actions">
                 <button class="btn btn-primary" onclick="AdminApp.showCreateUserModal()">+ 创建账号</button>
                 <button class="btn btn-secondary" onclick="AdminApp.showImportModal()">📥 导入数据</button>
-                <button class="btn btn-warning" onclick="location.href='index.html'">返回前台</button>
                 <button class="btn btn-danger" onclick="AdminApp.logout()">退出登录</button>
             </div>
         </div>
@@ -511,6 +510,82 @@
             </div>
         </div>
     </div>
+
+    <!-- 图片预览模态框 -->
+    <div class="modal" id="imageModal" onclick="AdminApp.closeImageModal()">
+        <div class="image-modal-content" onclick="event.stopPropagation()">
+            <img id="imageModalImg" src="" />
+            <span class="close-image-modal" onclick="AdminApp.closeImageModal()">×</span>
+        </div>
+    </div>
+
+    <style>
+        .images-preview {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .preview-img {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid #ddd;
+            transition: transform 0.2s;
+        }
+
+        .preview-img:hover {
+            transform: scale(1.1);
+        }
+
+        .more-images {
+            background: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .image-modal-content {
+            position: relative;
+            max-width: 90vw;
+            max-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            box-shadow: none;
+        }
+
+        .image-modal-content img {
+            max-width: 100%;
+            max-height: 90vh;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
+        .close-image-modal {
+            position: absolute;
+            top: -40px;
+            right: 0;
+            font-size: 40px;
+            color: white;
+            cursor: pointer;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .records-table {
+            table-layout: fixed;
+        }
+
+        .records-table th:nth-child(8),
+        .records-table td:nth-child(8) {
+            width: 180px;
+        }
+    </style>
 
     <script src="js/admin.js"></script>
 </body>

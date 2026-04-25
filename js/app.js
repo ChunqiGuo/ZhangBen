@@ -343,6 +343,14 @@ const App = {
             try {
                 const user = await Storage.getUserProfile();
                 this.currentUser = user;
+                
+                // 如果是管理员，直接跳转到后台
+                if (user.username === 'xiaoqimate') {
+                    location.href = 'admin.html';
+                    return;
+                }
+                
+                // 普通用户进入用户界面
                 this.showPage('home-page');
                 await this.loadNotebooks();
                 await this.checkAdminStatus();
@@ -361,17 +369,8 @@ const App = {
     },
 
     async checkAdminStatus() {
-        try {
-            await Storage.request('/admin/users', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            });
-            document.getElementById('admin-btn').style.display = 'block';
-        } catch (error) {
-            document.getElementById('admin-btn').style.display = 'none';
-        }
+        // 普通用户永远不显示管理员按钮
+        document.getElementById('admin-btn').style.display = 'none';
     },
 
     showPage(pageId) {
