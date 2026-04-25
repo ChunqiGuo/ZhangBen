@@ -15,90 +15,146 @@ const App = {
     updateScenicBackground() {
         const hour = new Date().getHours();
         const img = document.getElementById('scenic-image');
-        const hourStr = hour.toString().padStart(2, '0');
-        img.style.backgroundImage = `url('images/hour_${hourStr}.jpg')`;
+        if (img) {
+            const hourStr = hour.toString().padStart(2, '0');
+            img.style.backgroundImage = `url('images/hour_${hourStr}.jpg')`;
+        }
     },
 
     bindEvents() {
         if (this.eventsBound) return;
         this.eventsBound = true;
 
-        document.getElementById('login-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.login();
-        });
+        const loginForm = document.getElementById('login-form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.login();
+            });
+        }
 
-        document.getElementById('logout-btn').addEventListener('click', () => {
-            this.logout();
-        });
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                this.logout();
+            });
+        }
 
-        document.getElementById('create-notebook-btn').addEventListener('click', () => {
-            this.showCreateNotebookModal();
-        });
+        const createNotebookBtn = document.getElementById('create-notebook-btn');
+        if (createNotebookBtn) {
+            createNotebookBtn.addEventListener('click', () => {
+                this.showCreateNotebookModal();
+            });
+        }
 
-        document.getElementById('theme-btn').addEventListener('click', () => {
-            this.showColorPickerModal();
-        });
+        const themeBtn = document.getElementById('theme-btn');
+        if (themeBtn) {
+            themeBtn.addEventListener('click', () => {
+                this.showColorPickerModal();
+            });
+        }
 
-        document.getElementById('settings-btn').addEventListener('click', () => {
-            this.showSettingsModal();
-        });
+        const settingsBtn = document.getElementById('settings-btn');
+        if (settingsBtn) {
+            settingsBtn.addEventListener('click', () => {
+                this.showSettingsModal();
+            });
+        }
 
-        document.getElementById('back-to-home-btn').addEventListener('click', () => {
-            this.showPage('home-page');
-            this.loadNotebooks();
-        });
+        const backToHomeBtn = document.getElementById('back-to-home-btn');
+        if (backToHomeBtn) {
+            backToHomeBtn.addEventListener('click', () => {
+                this.showPage('home-page');
+                this.loadNotebooks();
+            });
+        }
 
-        document.getElementById('date-picker').addEventListener('change', (e) => {
-            this.currentDate = e.target.value;
-            this.loadDayData();
-        });
+        const datePicker = document.getElementById('date-picker');
+        if (datePicker) {
+            datePicker.addEventListener('change', (e) => {
+                this.currentDate = e.target.value;
+                this.loadDayData();
+            });
+        }
 
-        document.getElementById('prev-day-btn').addEventListener('click', () => {
-            const date = new Date(this.currentDate);
-            date.setDate(date.getDate() - 1);
-            this.currentDate = date.toISOString().split('T')[0];
-            document.getElementById('date-picker').value = this.currentDate;
-            this.loadDayData();
-        });
+        const prevDayBtn = document.getElementById('prev-day-btn');
+        if (prevDayBtn) {
+            prevDayBtn.addEventListener('click', () => {
+                const date = new Date(this.currentDate);
+                date.setDate(date.getDate() - 1);
+                this.currentDate = date.toISOString().split('T')[0];
+                datePicker.value = this.currentDate;
+                this.loadDayData();
+            });
+        }
 
-        document.getElementById('next-day-btn').addEventListener('click', () => {
-            const date = new Date(this.currentDate);
-            date.setDate(date.getDate() + 1);
-            this.currentDate = date.toISOString().split('T')[0];
-            document.getElementById('date-picker').value = this.currentDate;
-            this.loadDayData();
-        });
+        const nextDayBtn = document.getElementById('next-day-btn');
+        if (nextDayBtn) {
+            nextDayBtn.addEventListener('click', () => {
+                const date = new Date(this.currentDate);
+                date.setDate(date.getDate() + 1);
+                this.currentDate = date.toISOString().split('T')[0];
+                datePicker.value = this.currentDate;
+                this.loadDayData();
+            });
+        }
 
-        document.getElementById('add-record-btn').addEventListener('click', () => {
-            this.showCategoryListModal();
-        });
+        const addRecordBtn = document.getElementById('add-record-btn');
+        if (addRecordBtn) {
+            addRecordBtn.addEventListener('click', () => {
+                this.showCategoryListModal();
+            });
+        }
 
-        document.getElementById('upload-image-btn').addEventListener('click', () => {
-            this.showImageUploadOptions();
-        });
+        const uploadImageBtn = document.getElementById('upload-image-btn');
+        if (uploadImageBtn) {
+            uploadImageBtn.addEventListener('click', () => {
+                this.showImageUploadOptions();
+            });
+        }
 
-        document.getElementById('print-btn').addEventListener('click', () => {
-            this.preparePrint();
-        });
+        const printBtn = document.getElementById('print-btn');
+        if (printBtn) {
+            printBtn.addEventListener('click', () => {
+                this.preparePrint();
+            });
+        }
 
-        document.getElementById('image-input').addEventListener('change', (e) => {
-            this.handleImageUpload(e.target.files[0]);
-            e.target.value = '';
-        });
+        const imageInput = document.getElementById('image-input');
+        if (imageInput) {
+            imageInput.addEventListener('change', (e) => {
+                this.handleImageUpload(e.target.files[0]);
+                e.target.value = '';
+            });
+        }
 
-        document.getElementById('customer-name').addEventListener('input', () => {
-            this.saveCustomerInfo();
-        });
-        document.getElementById('customer-phone').addEventListener('input', () => {
-            this.saveCustomerInfo();
-        });
-        document.getElementById('customer-address').addEventListener('input', () => {
-            this.saveCustomerInfo();
-        });
-        document.getElementById('customer-contact').addEventListener('input', () => {
-            this.saveCustomerInfo();
-        });
+        const customerName = document.getElementById('customer-name');
+        if (customerName) {
+            customerName.addEventListener('input', () => {
+                this.saveCustomerInfo();
+            });
+        }
+
+        const customerPhone = document.getElementById('customer-phone');
+        if (customerPhone) {
+            customerPhone.addEventListener('input', () => {
+                this.saveCustomerInfo();
+            });
+        }
+
+        const customerAddress = document.getElementById('customer-address');
+        if (customerAddress) {
+            customerAddress.addEventListener('input', () => {
+                this.saveCustomerInfo();
+            });
+        }
+
+        const customerContact = document.getElementById('customer-contact');
+        if (customerContact) {
+            customerContact.addEventListener('input', () => {
+                this.saveCustomerInfo();
+            });
+        }
     },
 
     showColorPickerModal() {
