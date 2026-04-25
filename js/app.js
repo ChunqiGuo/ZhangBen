@@ -40,10 +40,6 @@ const App = {
             this.showColorPickerModal();
         });
 
-        document.getElementById('admin-btn').addEventListener('click', () => {
-            location.href = 'admin.html';
-        });
-
         document.getElementById('settings-btn').addEventListener('click', () => {
             this.showSettingsModal();
         });
@@ -353,7 +349,6 @@ const App = {
                 // 普通用户进入用户界面
                 this.showPage('home-page');
                 await this.loadNotebooks();
-                await this.checkAdminStatus();
                 if (!user.companyName && !user.companyPhone && !user.companyAddress && !user.companyWechat) {
                     setTimeout(() => {
                         this.showSettingsModal();
@@ -366,11 +361,6 @@ const App = {
         } else {
             this.showPage('login-page');
         }
-    },
-
-    async checkAdminStatus() {
-        // 普通用户永远不显示管理员按钮
-        document.getElementById('admin-btn').style.display = 'none';
     },
 
     showPage(pageId) {
@@ -402,7 +392,6 @@ const App = {
             // 普通用户进入用户界面
             this.showPage('home-page');
             await this.loadNotebooks();
-            await this.checkAdminStatus();
             if (!data.user.companyName && !data.user.companyPhone && !data.user.companyAddress && !data.user.companyWechat) {
                 setTimeout(() => {
                     this.showSettingsModal();
