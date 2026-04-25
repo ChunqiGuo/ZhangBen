@@ -205,6 +205,15 @@ const AdminApp = {
                 this.imagesByDate[img.date].push(img);
             });
 
+            // 按日期分组记录
+            const recordsByDate = {};
+            records.forEach(record => {
+                if (!recordsByDate[record.date]) {
+                    recordsByDate[record.date] = [];
+                }
+                recordsByDate[record.date].push(record);
+            });
+
             recordsView.style.display = 'block';
 
             if (records.length === 0) {
@@ -227,29 +236,35 @@ const AdminApp = {
                         </tr>
                     </thead>
                     <tbody>
-                        ${records.map(record => {
-                            const dateImages = this.imagesByDate[record.date] || [];
-                            return `
-                            <tr>
-                                <td>${record.date || '-'}</td>
-                                <td>${record.category || '-'}</td>
-                                <td>${record.price || '-'}</td>
-                                <td>${record.unit || '-'}</td>
-                                <td>${record.quantity || '-'}</td>
-                                <td>${record.amount || '-'}</td>
-                                <td>${record.remark || '-'}</td>
-                                <td>
-                                    <div class="images-preview">
-                                        ${dateImages.length > 0 ? 
-                                            dateImages.slice(0, 3).map(img => `
-                                                <img src="${img.url}" class="preview-img" onclick="AdminApp.showImageModal('${img.url}')" />
-                                            `).join('') + (dateImages.length > 3 ? `<span class="more-images">+${dateImages.length - 3}</span>` : '') 
-                                            : '-'
-                                        }
-                                    </div>
-                                </td>
-                            </tr>
-                        `}).join('')}
+                        ${Object.entries(recordsByDate).map(([date, dateRecords]) => {
+                            const dateImages = this.imagesByDate[date] || [];
+                            const rowspan = dateRecords.length;
+                            return dateRecords.map((record, index) => `
+                                <tr>
+                                    ${index === 0 ? `
+                                        <td rowspan="${rowspan}" valign="top">${date}</td>
+                                    ` : ''}
+                                    <td>${record.category || '-'}</td>
+                                    <td>${record.price || '-'}</td>
+                                    <td>${record.unit || '-'}</td>
+                                    <td>${record.quantity || '-'}</td>
+                                    <td>${record.amount || '-'}</td>
+                                    <td>${record.remark || '-'}</td>
+                                    ${index === 0 ? `
+                                        <td rowspan="${rowspan}" valign="top">
+                                            <div class="images-preview">
+                                                ${dateImages.length > 0 ? 
+                                                    dateImages.slice(0, 3).map(img => `
+                                                        <img src="${img.url}" class="preview-img" onclick="AdminApp.showImageModal('${img.url}')" />
+                                                    `).join('') + (dateImages.length > 3 ? `<span class="more-images">+${dateImages.length - 3}</span>` : '') 
+                                                    : '-'
+                                                }
+                                            </div>
+                                        </td>
+                                    ` : ''}
+                                </tr>
+                            `).join('');
+                        }).join('')}
                     </tbody>
                 </table>
             `;
